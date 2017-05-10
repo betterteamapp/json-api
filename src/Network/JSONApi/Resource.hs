@@ -69,9 +69,15 @@ A typeclass for decorating an entity with JSON API properties
 class (ToJSON a, FromJSON a) => ResourcefulEntity a where
   resourceIdentifier :: a -> Text
   resourceType :: a -> Text
+
   resourceLinks :: a -> Maybe Links
+  resourceLinks = const Nothing
+
   resourceMetaData :: a -> Maybe Meta
+  resourceMetaData = const Nothing
+
   resourceRelationships :: a -> Maybe Relationships
+  resourceRelationships = const Nothing
 
   fromResource :: Resource a -> a
   fromResource = getResource
