@@ -20,6 +20,7 @@ import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Monoid
 import Data.Text (Text)
+import Data.These (These(..))
 import GHC.Generics hiding (Meta)
 import Network.JSONApi.Identifier (HasIdentifier (..), Identifier (..))
 import Network.JSONApi.Link (Links)
@@ -138,8 +139,9 @@ Constructor function for creating a Relationship record
 
 A relationship must contain either an Identifier or a Links record
 -}
-mkRelationship :: Maybe Identifier -> Maybe Links -> Maybe Relationship
-mkRelationship Nothing Nothing = Nothing
-mkRelationship resId links = Just $ Relationship resId links
+mkRelationship :: These Identifier Links -> Relationship
+mkRelationship (This resId) = Relationship (Just resId) Nothing
+mkRelationship (That links) = Relationship Nothing $ Just links
+mkRelationship (These resId links) = Relationship (Just resId) (Just links)
 
 makeLenses ''Resource

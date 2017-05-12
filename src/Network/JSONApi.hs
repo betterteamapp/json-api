@@ -27,8 +27,10 @@ module Network.JSONApi
 , D.mkCompoundDocument'
 , D.mkIncludedResource
 , M.mkMeta
+, module These
 ) where
 
+import qualified Data.These as These
 import qualified Network.JSONApi.Error as E
 import qualified Network.JSONApi.Document as D
 import qualified Network.JSONApi.Identifier as I
