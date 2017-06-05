@@ -28,7 +28,7 @@ This object will be found at multiple levels of the JSON-API structure
 Specification: <http://jsonapi.org/format/#document-resource-identifier-objects>
 -}
 data Identifier = Identifier
-  { _ident :: Text
+  { _ident :: Maybe Text
   , _datatype :: Text
   , _metadata :: Maybe Meta
   } deriving (Show, Eq)

@@ -7,6 +7,7 @@ module Network.JSONApi.Meta
 ( Meta
 , MetaObject (..)
 , mkMeta
+, rawMeta
 )where
 
 import Data.Aeson (ToJSON, FromJSON, Object, toJSON)
@@ -73,3 +74,7 @@ See MetaSpec.hs for an example
 -}
 mkMeta :: (MetaObject a) => a -> Meta
 mkMeta obj = Meta $ HM.singleton (typeName obj) (toJSON obj)
+
+rawMeta :: Object -> Meta
+rawMeta = Meta
+

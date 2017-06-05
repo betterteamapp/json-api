@@ -1,13 +1,19 @@
+{-# LANGUAGE DeriveFunctor #-}
 {- |
 Module representing a JSON-API resource object.
 
 Specification: <http://jsonapi.org/format/#document-resource-objects>
 -}
 module Network.JSONApi.Resource
-( Resource (..)
+( Resource
+, resIdentifier
+, resValue
+, resLinks
+, resRelationships
 , Relationships
 , ResourcefulEntity (..)
 , Relationship
+, RelationshipType(..)
 , mkRelationship
 , mkRelationships
 ) where
@@ -28,70 +34,6 @@ import Network.JSONApi.Meta (Meta)
 import Prelude hiding (id)
 
 {- |
-Type representing a JSON-API resource object.
-
-A Resource supplies standardized data and metadata about a resource.
-
-Specification: <http://jsonapi.org/format/#document-resource-objects>
--}
-data Resource a = Resource
-  { getIdentifier :: Identifier
-  , getResource :: a
-  , getLinks :: Maybe Links
-  , getRelationships :: Maybe Relationships
-  } deriving (Show, Eq, Generic)
-
-instance (ToJSON a) => ToJSON (Resource a) where
-  toJSON (Resource (Identifier resId resType metaObj) resObj linksObj rels) =
-    AE.object [ "id"            .= resId
-              , "type"          .= resType
-              , "attributes"    .= resObj
-              , "links"         .= linksObj
-              , "meta"          .= metaObj
-              , "relationships" .= rels
-              ]
-
-instance (FromJSON a) => FromJSON (Resource a) where
-  parseJSON = AE.withObject "resourceObject" $ \v -> do
-    id    <- v .: "id"
-    typ   <- v .: "type"
-    attrs <- v .: "attributes"
-    links <- v .:? "links"
-    meta  <- v .:? "meta"
-    rels  <- v .:? "relationships"
-    return $ Resource (Identifier id typ meta) attrs links rels
-
-instance HasIdentifier (Resource a) where
-  identifier = getIdentifier
-
-{- |
-A typeclass for decorating an entity with JSON API properties
--}
-class (ToJSON a, FromJSON a) => ResourcefulEntity a where
-  resourceIdentifier :: a -> Text
-  resourceType :: a -> Text
-
-  resourceLinks :: a -> Maybe Links
-  resourceLinks = const Nothing
-
-  resourceMetaData :: a -> Maybe Meta
-  resourceMetaData = const Nothing
-
-  resourceRelationships :: a -> Maybe Relationships
-  resourceRelationships = const Nothing
-
-  fromResource :: Resource a -> a
-  fromResource = getResource
-
-  toResource :: a -> Resource a
-  toResource a =
-    Resource
-      (Identifier (resourceIdentifier a) (resourceType a) (resourceMetaData a))
-      a
-      (resourceLinks a)
-      (resourceRelationships a)
-
-{- |
 A type representing the Relationship between 2 entities
 
 A Relationship provides basic information for fetching further information
@@ -100,7 +42,7 @@ about a related resource.
 Specification: <http://jsonapi.org/format/#document-resource-object-relationships>
 -}
 data Relationship = Relationship
-  { _data :: Maybe Identifier
+  { _data :: Maybe (RelationshipType Identifier)
   , _links :: Maybe Links
   } deriving (Show, Eq, Generic)
 
@@ -123,15 +65,92 @@ instance Monoid Relationships where
   mempty = Relationships Map.empty
   mappend (Relationships a) (Relationships b) = Relationships (a <> b)
 
-mkRelationships :: Relationship -> Relationships
-mkRelationships rel =
-  Relationships $ Map.singleton (relationshipType rel) rel
+data RelationshipType a
+  = ToOne (Maybe a)
+  | ToMany [a]
+  deriving (Show, Eq, Functor)
 
+instance (ToJSON a) => ToJSON (RelationshipType a) where
+  toJSON rel = case rel of
+    ToOne mval -> case mval of
+      Nothing -> AE.Null
+      Just a -> AE.toJSON a
+    ToMany vals -> AE.toJSON vals
 
-relationshipType :: Relationship -> Text
-relationshipType relationship = case _data relationship of
-  Nothing -> "unidentified"
-  (Just (Identifier _ typ _)) -> typ
+instance (FromJSON a) => FromJSON (RelationshipType a) where
+  parseJSON AE.Null = pure $ ToOne Nothing
+  parseJSON o@(AE.Object _) = (ToOne . Just) <$> AE.parseJSON o
+  parseJSON a@(AE.Array _) = ToMany <$> AE.parseJSON a
+  parseJSON wat = AE.typeMismatch "RelationshipType" wat
+
+{- |
+Type representing a JSON-API resource object.
+
+A Resource supplies standardized data and metadata about a resource.
+
+Specification: <http://jsonapi.org/format/#document-resource-objects>
+-}
+data Resource a = Resource
+  { _resIdentifier :: Identifier
+  , _resValue :: a
+  , _resLinks :: Maybe Links
+  , _resRelationships :: Maybe Relationships
+  } deriving (Show, Eq, Generic)
+
+makeFields ''Resource
+
+instance (ToJSON a) => ToJSON (Resource a) where
+  toJSON (Resource (Identifier resId resType metaObj) resObj linksObj rels) =
+    AE.object [ "id"            .= resId
+              , "type"          .= resType
+              , "attributes"    .= resObj
+              , "links"         .= linksObj
+              , "meta"          .= metaObj
+              , "relationships" .= rels
+              ]
+
+instance (FromJSON a) => FromJSON (Resource a) where
+  parseJSON = AE.withObject "resourceObject" $ \v -> do
+    id    <- v .:? "id"
+    typ   <- v .: "type"
+    attrs <- v .: "attributes"
+    links <- v .:? "links"
+    meta  <- v .:? "meta"
+    rels  <- v .:? "relationships"
+    return $ Resource (Identifier id typ meta) attrs links rels
+
+instance HasIdentifier (Resource a) where
+  identifier = _resIdentifier
+
+{- |
+A typeclass for decorating an entity with JSON API properties
+-}
+class ResourcefulEntity a where
+  resourceIdentifier :: a -> Maybe Text
+  resourceType :: a -> Text
+
+  resourceLinks :: a -> Maybe Links
+  resourceLinks = const Nothing
+
+  resourceMetaData :: a -> Maybe Meta
+  resourceMetaData = const Nothing
+
+  resourceRelationships :: a -> Maybe Relationships
+  resourceRelationships = const Nothing
+
+  fromResource :: Resource a -> a
+  fromResource = _resValue
+
+  toResource :: a -> Resource a
+  toResource a =
+    Resource
+      (Identifier (resourceIdentifier a) (resourceType a) (resourceMetaData a))
+      a
+      (resourceLinks a)
+      (resourceRelationships a)
+
+mkRelationships :: [(Text, Relationship)] -> Relationships
+mkRelationships = Relationships . Map.fromList
 
 
 {- |
@@ -139,7 +158,7 @@ Constructor function for creating a Relationship record
 
 A relationship must contain either an Identifier or a Links record
 -}
-mkRelationship :: These Identifier Links -> Relationship
+mkRelationship :: These (RelationshipType Identifier) Links -> Relationship
 mkRelationship (This resId) = Relationship (Just resId) Nothing
 mkRelationship (That links) = Relationship Nothing $ Just links
 mkRelationship (These resId links) = Relationship (Just resId) (Just links)

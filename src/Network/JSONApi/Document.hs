@@ -3,6 +3,10 @@ Contains representations of the top-level JSON-API document structure.
 -}
 module Network.JSONApi.Document
   ( Document
+  , docData
+  , docLinks
+  , docMeta
+  , docIncluded
   , ResourceData (..)
   , ErrorDocument (..)
   , Included
@@ -24,7 +28,9 @@ import Data.Aeson
   , (.:)
   , (.:?)
   )
+import Control.Lens.TH
 import qualified Data.Aeson as AE
+import Data.Maybe (fromMaybe)
 import Data.Monoid
 import qualified GHC.Generics as G
 import qualified Network.JSONApi.Error as E
@@ -32,6 +38,18 @@ import Network.JSONApi.Link as L
 import Network.JSONApi.Meta as M
 import Network.JSONApi.Resource (Resource, ResourcefulEntity)
 import qualified Network.JSONApi.Resource as R
+
+{- |
+The 'Resource' type encapsulates the underlying 'Resource'
+
+Included in the top-level 'Document', the 'Resource' may be either
+a singleton resource or a list.
+
+For more information see: <http://jsonapi.org/format/#document-top-level>
+-}
+data ResourceData a = Singleton (Resource a)
+                    | List [ Resource a ]
+                    deriving (Show, Eq, G.Generic)
 
 {- |
 The 'Document' type represents the top-level JSON-API requirement.
@@ -42,11 +60,13 @@ or a list of resources. See 'Resource' for the construction.
 For more information see: <http://jsonapi.org/format/#document-top-level>
 -}
 data Document a = Document
-  { _data  ::  ResourceData a
-  , _links ::  Maybe Links
-  , _meta  ::  Maybe Meta
-  , _included :: [Value]
+  { _docData  ::  ResourceData a
+  , _docLinks ::  Maybe Links
+  , _docMeta  ::  Maybe Meta
+  , _docIncluded :: [Value]
   } deriving (Show, Eq, G.Generic)
+
+makeLenses ''Document
 
 instance (ToJSON a)
       => ToJSON (Document a) where
@@ -68,8 +88,8 @@ instance (FromJSON a) => FromJSON (Document a) where
     d <- v .:  "data"
     l <- v .:? "links"
     m <- v .:? "meta"
-    i <- v .: "included"
-    return (Document d l m i)
+    i <- v .:? "included"
+    return (Document d l m $ fromMaybe [] i)
 
 {- |
 The 'Included' type is an abstraction used to constrain the @included@
@@ -106,10 +126,10 @@ mkDocument' :: ResourceData a
             -> Document a
 mkDocument' res links meta =
   Document
-    { _data = res
-    , _links = links
-    , _meta = meta
-    , _included = []
+    { _docData = res
+    , _docLinks = links
+    , _docMeta = meta
+    , _docIncluded = []
     }
 
 {- |
@@ -134,10 +154,10 @@ mkCompoundDocument' :: ResourceData a
                     -> Document a
 mkCompoundDocument' res links meta (Included included) =
   Document
-    { _data = res
-    , _links = links
-    , _meta = meta
-    , _included = included
+    { _docData = res
+    , _docLinks = links
+    , _docMeta = meta
+    , _docIncluded = included
     }
 
 {- |
@@ -146,24 +166,12 @@ Constructor function for the Document data type.
 Supports building compound documents
 <http://jsonapi.org/format/#document-compound-documents>
 -}
-mkIncludedResource :: ResourcefulEntity a => a -> Included
+mkIncludedResource :: (AE.ToJSON a, ResourcefulEntity a) => a -> Included
 mkIncludedResource res = Included [AE.toJSON . R.toResource $ res]
 
 toResourceData :: ResourcefulEntity a => [a] -> ResourceData a
 toResourceData (r:[]) = Singleton (R.toResource r)
 toResourceData rs     = List (map R.toResource rs)
-
-{- |
-The 'Resource' type encapsulates the underlying 'Resource'
-
-Included in the top-level 'Document', the 'Resource' may be either
-a singleton resource or a list.
-
-For more information see: <http://jsonapi.org/format/#document-top-level>
--}
-data ResourceData a = Singleton (Resource a)
-                    | List [ Resource a ]
-                    deriving (Show, Eq, G.Generic)
 
 singleton :: ResourcefulEntity a => a -> ResourceData a
 singleton = Singleton . R.toResource
