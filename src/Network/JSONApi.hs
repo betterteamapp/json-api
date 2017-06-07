@@ -13,7 +13,7 @@ module Network.JSONApi
 , E.Error (..)
 , R.Relationship
 , R.RelationshipType(..)
-, R.Resource (..)
+, R.Resource
 , R.resIdentifier
 , R.resValue
 , R.resLinks
@@ -22,6 +22,9 @@ module Network.JSONApi
 , R.ResourcefulEntity (..)
 , I.HasIdentifier (..)
 , I.Identifier (..)
+, I.datatype
+, I.ident
+, I.metadata
 , L.Links(..)
 , M.Meta
 , M.MetaObject (..)
