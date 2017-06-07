@@ -22,7 +22,7 @@ module Network.JSONApi
 , R.ResourcefulEntity (..)
 , I.HasIdentifier (..)
 , I.Identifier (..)
-, L.Links
+, L.Links(..)
 , M.Meta
 , M.MetaObject (..)
 , L.mkLinks

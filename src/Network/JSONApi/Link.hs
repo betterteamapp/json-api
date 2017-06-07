@@ -4,7 +4,7 @@ Module representing a JSON-API link object.
 Specification: <http://jsonapi.org/format/#document-links>
 -}
 module Network.JSONApi.Link
-( Links
+( Links(..)
 , Rel
 , Href
 , mkLinks
@@ -32,7 +32,7 @@ Example JSON:
 
 Specification: <http://jsonapi.org/format/#document-links>
 -}
-newtype Links = Links (Map Rel Href)
+newtype Links = Links { fromLinks :: Map Rel Href }
   deriving (Show, Eq, Ord, ToJSON, FromJSON, G.Generic)
 
 type Rel = Text
