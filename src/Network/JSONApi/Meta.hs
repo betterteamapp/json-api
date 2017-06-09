@@ -37,10 +37,7 @@ Example JSON:
 Specification: <http://jsonapi.org/format/#document-meta>
 -}
 newtype Meta = Meta { fromMeta :: Object }
-  deriving (Show, Eq, G.Generic, Monoid)
-
-instance ToJSON Meta
-instance FromJSON Meta
+  deriving (Show, Eq, G.Generic, Monoid, ToJSON, FromJSON)
 
 {- |
 Convienience class for constructing a Meta type

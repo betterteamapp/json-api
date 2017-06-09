@@ -59,10 +59,7 @@ instance FromJSON Relationship where
 
 
 newtype Relationships = Relationships { fromRelationships :: HM.HashMap Text Relationship }
-  deriving (Show, Eq, Generic, Monoid)
-
-instance ToJSON Relationships
-instance FromJSON Relationships
+  deriving (Show, Eq, Generic, Monoid, ToJSON, FromJSON)
 
 data RelationshipType a
   = ToOne (Maybe a)
