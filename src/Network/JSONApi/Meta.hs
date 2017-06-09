@@ -4,7 +4,7 @@ Module representing a JSON-API meta object.
 Specification: <http://jsonapi.org/format/#document-meta>
 -}
 module Network.JSONApi.Meta
-( Meta
+( Meta(..)
 , MetaObject (..)
 , mkMeta
 , rawMeta
@@ -36,15 +36,11 @@ Example JSON:
 
 Specification: <http://jsonapi.org/format/#document-meta>
 -}
-data Meta = Meta Object
-  deriving (Show, Eq, G.Generic)
+newtype Meta = Meta { fromMeta :: Object }
+  deriving (Show, Eq, G.Generic, Monoid)
 
 instance ToJSON Meta
 instance FromJSON Meta
-
-instance Monoid Meta where
-  mappend (Meta a) (Meta b) = Meta $ HM.union a b
-  mempty = Meta $ HM.empty
 
 {- |
 Convienience class for constructing a Meta type

@@ -1,3 +1,7 @@
+{-# LANGUAGE DeriveFunctor    #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE UndecidableInstances #-}
 {- |
 Contains representations of the top-level JSON-API document structure.
 -}
@@ -7,22 +11,26 @@ module Network.JSONApi.Document
   , docLinks
   , docMeta
   , docIncluded
-  , ResourceData (..)
+  , AnyData (..)
+  , Single(..)
   , ErrorDocument (..)
+  , errorDoc
   , Included
-  , mkDocument
-  , mkDocument'
+  , getIncluded
+  , oneDoc
+  , manyDocs
+  , include
+  , includes
   , singleton
   , list
-  , mkCompoundDocument
-  , mkCompoundDocument'
-  , mkIncludedResource
   ) where
 
 import Control.Monad (mzero)
 import Data.Aeson
   ( ToJSON
+  , ToJSON1
   , FromJSON
+  , FromJSON1
   , Value
   , (.=)
   , (.:)
@@ -30,8 +38,10 @@ import Data.Aeson
   )
 import Control.Lens.TH
 import qualified Data.Aeson as AE
-import Data.Maybe (fromMaybe)
-import Data.Monoid
+import qualified Data.DList as DL
+import Data.Foldable
+import qualified Data.HashMap.Strict as HM
+import Data.Maybe (catMaybes, fromMaybe)
 import qualified GHC.Generics as G
 import qualified Network.JSONApi.Error as E
 import Network.JSONApi.Link as L
@@ -47,9 +57,12 @@ a singleton resource or a list.
 
 For more information see: <http://jsonapi.org/format/#document-top-level>
 -}
-data ResourceData a = Singleton (Resource a)
-                    | List [ Resource a ]
-                    deriving (Show, Eq, G.Generic)
+data AnyData a = Singleton (Resource a)
+               | List [Resource a]
+               deriving (Show, Eq, G.Generic)
+
+newtype Single a = Single { fromSingle :: a }
+  deriving (Show, Eq, G.Generic, Functor, ToJSON, FromJSON)
 
 {- |
 The 'Document' type represents the top-level JSON-API requirement.
@@ -59,37 +72,39 @@ or a list of resources. See 'Resource' for the construction.
 
 For more information see: <http://jsonapi.org/format/#document-top-level>
 -}
-data Document a = Document
-  { _docData  ::  ResourceData a
-  , _docLinks ::  Maybe Links
-  , _docMeta  ::  Maybe Meta
+data Document f a = Document
+  { _docData  ::  f (Resource a)
+  , _docLinks ::  Links
+  , _docMeta  ::  Meta
   , _docIncluded :: [Value]
-  } deriving (Show, Eq, G.Generic)
+  } deriving (G.Generic)
+
+deriving instance (Show (f (Resource a))) => Show (Document f a)
+deriving instance (Eq (f (Resource a))) => Eq (Document f a)
 
 makeLenses ''Document
 
-instance (ToJSON a)
-      => ToJSON (Document a) where
-  toJSON (Document (List res) links meta included) =
-    AE.object [ "data"  .= res
-              , "links" .= links
-              , "meta"  .= meta
-              , "included" .= included
-              ]
-  toJSON (Document (Singleton res) links meta included) =
-    AE.object [ "data"  .= res
-              , "links" .= links
-              , "meta"  .= meta
-              , "included" .= included
-              ]
+instance (ToJSON (f (Resource a))) => ToJSON (Document f a) where
+  toJSON (Document vs links meta included) = AE.object
+    (("data" .= vs) : optionals)
+    where
+      optionals = catMaybes
+        [ if (HM.null $ fromLinks links) then Nothing else Just ("links" .= links)
+        , if (HM.null $ fromMeta meta) then Nothing else Just ("meta"  .= meta)
+        , if (null included) then Nothing else Just ("included" .= included)
+        ]
 
-instance (FromJSON a) => FromJSON (Document a) where
+instance (FromJSON (f (Resource a))) => FromJSON (Document f a) where
   parseJSON = AE.withObject "document" $ \v -> do
     d <- v .:  "data"
     l <- v .:? "links"
     m <- v .:? "meta"
     i <- v .:? "included"
-    return (Document d l m $ fromMaybe [] i)
+    return $ Document
+      d
+      (fromMaybe mempty l)
+      (fromMaybe mempty m)
+      (fromMaybe [] i)
 
 {- |
 The 'Included' type is an abstraction used to constrain the @included@
@@ -100,90 +115,49 @@ No data constructors for this type are exported as we need to
 constrain the 'Value' to a heterogeneous list of Resource types.
 See 'mkIncludedResource' for creating 'Included' types.
 -}
-data Included = Included [Value]
-  deriving (Show)
+newtype Included = Included (DL.DList Value)
+  deriving (Show, Monoid)
 
-instance Monoid Included where
-  mempty = Included []
-  mappend (Included as) (Included bs) = Included (as <> bs)
+getIncluded :: Included -> [Value]
+getIncluded (Included d) = DL.toList d
 
 {- |
 Constructor function for the Document data type.
-
-See 'mkCompoundDocument' for constructing compound Document
-including 'side-loaded' resources
 -}
-mkDocument :: ResourcefulEntity a =>
-              [a]
-           -> Maybe Links
-           -> Maybe Meta
-           -> Document a
-mkDocument res = mkDocument' (toResourceData res)
-
-mkDocument' :: ResourceData a
-            -> Maybe Links
-            -> Maybe Meta
-            -> Document a
-mkDocument' res links meta =
-  Document
-    { _docData = res
-    , _docLinks = links
-    , _docMeta = meta
-    , _docIncluded = []
-    }
+oneDoc :: ResourcefulEntity a => a -> Document Single (R.ResourceValue a)
+oneDoc a = Document (Single $ R.toResource a) mempty mempty mempty
 
 {- |
 Constructor function for the Document data type.
-See 'mkIncludedResource' for constructing the 'Included' type.
+-}
+manyDocs :: ResourcefulEntity a => [a] -> Document [] (R.ResourceValue a)
+manyDocs a = Document (map R.toResource a) mempty mempty mempty
 
+{- |
 Supports building compound documents
 <http://jsonapi.org/format/#document-compound-documents>
 -}
-mkCompoundDocument :: ResourcefulEntity a =>
-                      [a]
-                   -> Maybe Links
-                   -> Maybe Meta
-                   -> Included
-                   -> Document a
-mkCompoundDocument res = mkCompoundDocument' (toResourceData res)
-
-mkCompoundDocument' :: ResourceData a
-                    -> Maybe Links
-                    -> Maybe Meta
-                    -> Included
-                    -> Document a
-mkCompoundDocument' res links meta (Included included) =
-  Document
-    { _docData = res
-    , _docLinks = links
-    , _docMeta = meta
-    , _docIncluded = included
-    }
+include :: (AE.ToJSON (R.ResourceValue a), ResourcefulEntity a) => a -> Included
+include = Included . DL.singleton . AE.toJSON . R.toResource
 
 {- |
-Constructor function for the Document data type.
-
 Supports building compound documents
 <http://jsonapi.org/format/#document-compound-documents>
 -}
-mkIncludedResource :: (AE.ToJSON a, ResourcefulEntity a) => a -> Included
-mkIncludedResource res = Included [AE.toJSON . R.toResource $ res]
+includes :: (Foldable f, AE.ToJSON (R.ResourceValue a), ResourcefulEntity a) => f a -> Included
+includes = Included . DL.fromList . fmap (AE.toJSON . R.toResource) . toList
 
-toResourceData :: ResourcefulEntity a => [a] -> ResourceData a
-toResourceData (r:[]) = Singleton (R.toResource r)
-toResourceData rs     = List (map R.toResource rs)
-
-singleton :: ResourcefulEntity a => a -> ResourceData a
+singleton :: ResourcefulEntity a => a -> AnyData (R.ResourceValue a)
 singleton = Singleton . R.toResource
 
-list :: ResourcefulEntity a => [a] -> ResourceData a
+list :: ResourcefulEntity a => [a] -> AnyData (R.ResourceValue a)
 list = List . map R.toResource
 
-instance (ToJSON a) => ToJSON (ResourceData a) where
+instance (ToJSON a) => ToJSON (AnyData a) where
   toJSON (Singleton res) = AE.toJSON res
   toJSON (List res)      = AE.toJSON res
 
-instance (FromJSON a) => FromJSON (ResourceData a) where
+instance (FromJSON a) => FromJSON (AnyData a) where
   parseJSON (AE.Object v) = Singleton <$> (AE.parseJSON (AE.Object v))
   parseJSON (AE.Array v)  = List <$> (AE.parseJSON (AE.Array v))
   parseJSON _             = mzero
@@ -198,21 +172,24 @@ error detail.
 For more information see: <http://jsonapi.org/format/#errors>
 -}
 data ErrorDocument a = ErrorDocument
-  { _error :: E.Error a
-  , _errorLinks :: Maybe Links
-  , _errorMeta  :: Maybe Meta
+  { _errors :: [E.Error a]
+  , _errorLinks :: Links
+  , _errorMeta :: Meta
   } deriving (Show, Eq, G.Generic)
 
-instance (ToJSON a) => ToJSON (ErrorDocument a) where
-  toJSON (ErrorDocument err links meta) =
-    AE.object [ "error" .= err
-              , "links" .= links
-              , "meta"  .= meta
-              ]
+instance ToJSON (ErrorDocument a) where
+  toJSON (ErrorDocument err links meta) = AE.object $ catMaybes
+    [ Just ("errors" .= err)
+    , if (null $ fromLinks links) then Nothing else Just ("links" .= links)
+    , if (HM.null $ fromMeta meta) then Nothing else Just ("meta"  .= meta)
+    ]
 
-instance (FromJSON a) => FromJSON (ErrorDocument a) where
-  parseJSON = AE.withObject "error" $ \v ->
-    ErrorDocument
-      <$> v .: "error"
-      <*> v .:? "links"
-      <*> v .:? "meta"
+instance FromJSON (ErrorDocument a) where
+  parseJSON = AE.withObject "errors" $ \v -> do
+    e <- v .: "errors"
+    l <- v .:? "links"
+    m <- v .:? "meta"
+    return $ ErrorDocument e (fromMaybe mempty l) (fromMaybe mempty m)
+
+errorDoc :: [E.Error a] -> ErrorDocument a
+errorDoc es = ErrorDocument es mempty mempty

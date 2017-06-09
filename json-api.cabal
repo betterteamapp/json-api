@@ -38,6 +38,7 @@ library
                , base                 >= 4.7 && < 5.0
                , containers
                , data-default
+               , dlist
                , lens
                , lens-aeson
                , text

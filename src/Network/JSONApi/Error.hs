@@ -35,8 +35,8 @@ data Error a =
         }
   deriving (Show, Eq, G.Generic)
 
-instance ToJSON a   => ToJSON (Error a)
-instance FromJSON a => FromJSON (Error a)
+instance ToJSON (Error a)
+instance FromJSON (Error a)
 
 instance Default (Error a) where
   def = Error

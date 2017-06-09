@@ -7,9 +7,12 @@ module Network.JSONApi
 , D.docLinks
 , D.docMeta
 , D.docIncluded
-, D.ResourceData (..)
+, D.AnyData (..)
+, D.Single(..)
 , D.ErrorDocument (..)
+, D.errorDoc
 , D.Included
+, D.getIncluded
 , E.Error (..)
 , R.Relationship
 , R.RelationshipType(..)
@@ -31,13 +34,12 @@ module Network.JSONApi
 , L.mkLinks
 , R.mkRelationship
 , R.mkRelationships
-, D.mkDocument
-, D.mkDocument'
+, D.oneDoc
+, D.manyDocs
 , D.singleton
 , D.list
-, D.mkCompoundDocument
-, D.mkCompoundDocument'
-, D.mkIncludedResource
+, D.include
+, D.includes
 , M.mkMeta
 , M.rawMeta
 , module These

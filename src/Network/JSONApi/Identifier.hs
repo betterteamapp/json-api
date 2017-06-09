@@ -14,9 +14,10 @@ module Network.JSONApi.Identifier
 import Control.Lens.TH
 import Data.Aeson (ToJSON, FromJSON, (.=), (.:), (.:?))
 import qualified Data.Aeson as AE
-import qualified Data.Aeson.Types as AE
+import qualified Data.HashMap.Strict as HM
+import Data.Maybe (fromMaybe)
 import Data.Text (Text)
-import Network.JSONApi.Meta (Meta)
+import Network.JSONApi.Meta (Meta(..))
 import Prelude hiding (id)
 
 {- |
@@ -30,22 +31,25 @@ Specification: <http://jsonapi.org/format/#document-resource-identifier-objects>
 data Identifier = Identifier
   { _ident :: Maybe Text
   , _datatype :: Text
-  , _metadata :: Maybe Meta
+  , _metadata :: Meta
   } deriving (Show, Eq)
 
 instance ToJSON Identifier where
-  toJSON (Identifier resId resType resMetaData) =
-    AE.object [ "id"            .= resId
-              , "type"          .= resType
-              , "meta"          .= resMetaData
-              ]
+  toJSON (Identifier resId resType resMetaData) = AE.object $ addOptional
+    [ "id"            .= resId
+    , "type"          .= resType
+    ]
+    where
+      addOptional l = if HM.null (fromMeta resMetaData)
+        then l
+        else (("meta" .= resMetaData) : l)
 
 instance FromJSON Identifier where
   parseJSON = AE.withObject "resourceIdentifier" $ \v -> do
     id    <- v .: "id"
     typ   <- v .: "type"
     meta  <- v .:? "meta"
-    return $ Identifier id typ meta
+    return $ Identifier id typ (fromMaybe mempty meta)
 
 
 {- |

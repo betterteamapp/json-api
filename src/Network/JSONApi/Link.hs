@@ -11,8 +11,7 @@ module Network.JSONApi.Link
 ) where
 
 import Data.Aeson (ToJSON, FromJSON)
-import Data.Map (Map)
-import qualified Data.Map as Map
+import qualified Data.HashMap.Strict as HM
 import Data.Text (Text, pack)
 import qualified GHC.Generics as G
 import Network.URL (URL, exportURL)
@@ -32,8 +31,8 @@ Example JSON:
 
 Specification: <http://jsonapi.org/format/#document-links>
 -}
-newtype Links = Links { fromLinks :: Map Rel Href }
-  deriving (Show, Eq, Ord, ToJSON, FromJSON, G.Generic)
+newtype Links = Links { fromLinks :: HM.HashMap Rel Href }
+  deriving (Show, Eq, ToJSON, FromJSON, G.Generic, Monoid)
 
 type Rel = Text
 type Href = Text
@@ -42,7 +41,7 @@ type Href = Text
 Constructor function for building Links
 -}
 mkLinks :: [(Rel, URL)] -> Links
-mkLinks = Links . Map.fromList . map buildLink
+mkLinks = Links . HM.fromList . map buildLink
 
 buildLink :: (Rel, URL) -> (Rel, Href)
 buildLink (key, url) = (key, pack (exportURL url))
