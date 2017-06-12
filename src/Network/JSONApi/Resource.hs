@@ -49,14 +49,14 @@ data Relationship = Relationship
   , _links :: Links
   } deriving (Show, Eq, Generic)
 
-instance ToJSON Relationship where
-  toJSON = AE.genericToJSON
-    AE.defaultOptions { AE.fieldLabelModifier = drop 1 }
+instance AE.ToJSON Relationship where
+  toJSON r = AE.object (("data" .= _data r) : (if HM.null (fromLinks $ _links r) then [] else ["links" .= _links r]))
 
-instance FromJSON Relationship where
-  parseJSON = AE.genericParseJSON
-    AE.defaultOptions { AE.fieldLabelModifier = drop 1 }
-
+instance AE.FromJSON Relationship where
+  parseJSON = AE.withObject "relationship" $ \r -> do
+    d <- r .:? "data"
+    l <- r .:? "links"
+    return $ Relationship d (fromMaybe mempty l)
 
 newtype Relationships = Relationships { fromRelationships :: HM.HashMap Text Relationship }
   deriving (Show, Eq, Generic, Monoid, ToJSON, FromJSON)

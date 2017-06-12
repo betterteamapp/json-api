@@ -28,9 +28,7 @@ module Network.JSONApi.Document
 import Control.Monad (mzero)
 import Data.Aeson
   ( ToJSON
-  , ToJSON1
   , FromJSON
-  , FromJSON1
   , Value
   , (.=)
   , (.:)
