@@ -36,6 +36,7 @@ module Network.JSONApi
 , R.mkRelationships
 , D.oneDoc
 , D.manyDocs
+, D.unsafeDoc
 , D.singleton
 , D.list
 , D.include

@@ -19,6 +19,7 @@ module Network.JSONApi.Document
   , getIncluded
   , oneDoc
   , manyDocs
+  , unsafeDoc
   , include
   , includes
   , singleton
@@ -57,10 +58,10 @@ For more information see: <http://jsonapi.org/format/#document-top-level>
 -}
 data AnyData a = Singleton (Resource a)
                | List [Resource a]
-               deriving (Show, Eq, G.Generic)
+               deriving (Show, Eq, G.Generic1, G.Generic)
 
 newtype Single a = Single { fromSingle :: a }
-  deriving (Show, Eq, G.Generic, Functor, ToJSON, FromJSON)
+  deriving (Show, Eq, G.Generic1, G.Generic, Functor, ToJSON, FromJSON)
 
 {- |
 The 'Document' type represents the top-level JSON-API requirement.
@@ -122,14 +123,22 @@ getIncluded (Included d) = DL.toList d
 {- |
 Constructor function for the Document data type.
 -}
-oneDoc :: ResourcefulEntity a => a -> Document Single (R.ResourceValue a)
-oneDoc a = Document (Single $ R.toResource a) mempty mempty mempty
+oneDoc :: (ToJSON (R.ResourceValue a), ResourcefulEntity a) => a -> Document Single (R.ResourceValue a)
+oneDoc = unsafeDoc . Single
 
 {- |
 Constructor function for the Document data type.
 -}
-manyDocs :: ResourcefulEntity a => [a] -> Document [] (R.ResourceValue a)
-manyDocs a = Document (map R.toResource a) mempty mempty mempty
+manyDocs :: (ToJSON (R.ResourceValue a), ResourcefulEntity a) => [a] -> Document [] (R.ResourceValue a)
+manyDocs = unsafeDoc
+
+{- |
+Constructor function for the Document data type. It is possible to create an
+invalid Document if the provided @f@ doesn't serialize to either single
+@ResourceValue@ or an array of @ResourceValue@s
+-}
+unsafeDoc :: (Functor f, AE.ToJSON (f (R.ResourceValue a)), ResourcefulEntity a) => f a -> Document f (R.ResourceValue a)
+unsafeDoc as = Document (R.toResource <$> as) mempty mempty mempty
 
 {- |
 Supports building compound documents
