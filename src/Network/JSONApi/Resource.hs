@@ -91,7 +91,7 @@ data Resource a = Resource
   , _resValue :: a
   , _resLinks :: Links
   , _resRelationships :: Relationships
-  } deriving (Show, Eq, Generic)
+  } deriving (Show, Eq, Generic, Functor)
 
 makeFields ''Resource
 

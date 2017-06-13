@@ -58,7 +58,7 @@ For more information see: <http://jsonapi.org/format/#document-top-level>
 -}
 data AnyData a = Singleton (Resource a)
                | List [Resource a]
-               deriving (Show, Eq, G.Generic1, G.Generic)
+               deriving (Show, Eq, G.Generic1, G.Generic, Functor)
 
 newtype Single a = Single { fromSingle :: a }
   deriving (Show, Eq, G.Generic1, G.Generic, Functor, ToJSON, FromJSON)
