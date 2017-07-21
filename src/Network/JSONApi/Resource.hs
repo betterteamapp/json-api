@@ -12,9 +12,11 @@ module Network.JSONApi.Resource
 , resValue
 , resLinks
 , resRelationships
-, Relationships
+, Relationships(..)
 , ResourcefulEntity (..)
 , Relationship
+, relData
+, relLinks
 , RelationshipType(..)
 , mkRelationship
 , mkRelationships
@@ -48,6 +50,12 @@ data Relationship = Relationship
   { _data :: Maybe (RelationshipType Identifier)
   , _links :: Links
   } deriving (Show, Eq, Generic)
+
+relData :: Relationship -> Maybe (RelationshipType Identifier)
+relData = _data
+
+relLinks :: Relationship -> Links
+relLinks = _links
 
 instance AE.ToJSON Relationship where
   toJSON r = AE.object (("data" .= _data r) : (if HM.null (fromLinks $ _links r) then [] else ["links" .= _links r]))
