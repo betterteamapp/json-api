@@ -58,7 +58,10 @@ relLinks :: Relationship -> Links
 relLinks = _links
 
 instance AE.ToJSON Relationship where
-  toJSON r = AE.object (("data" .= _data r) : (if HM.null (fromLinks $ _links r) then [] else ["links" .= _links r]))
+  toJSON r = AE.object $ catMaybes
+    [ maybe Nothing (Just . ("data" .=)) $ _data r
+    , if HM.null (fromLinks $ _links r) then Nothing else Just ("links" .= _links r)
+    ]
 
 instance AE.FromJSON Relationship where
   parseJSON = AE.withObject "relationship" $ \r -> do
