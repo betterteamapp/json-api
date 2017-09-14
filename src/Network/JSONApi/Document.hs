@@ -61,8 +61,10 @@ data AnyData a = Singleton (Resource a)
                | List [Resource a]
                deriving (Show, Eq, G.Generic1, G.Generic, Functor)
 
+instance Hashable a => Hashable (AnyData a)
+
 newtype Single a = Single { fromSingle :: a }
-  deriving (Show, Eq, G.Generic1, G.Generic, Functor, ToJSON, FromJSON)
+  deriving (Show, Eq, G.Generic1, G.Generic, Functor, ToJSON, FromJSON, Hashable)
 
 {- |
 The 'Document' type represents the top-level JSON-API requirement.
