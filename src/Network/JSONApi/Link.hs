@@ -11,6 +11,7 @@ module Network.JSONApi.Link
 ) where
 
 import Data.Aeson (ToJSON, FromJSON)
+import Data.Hashable
 import qualified Data.HashMap.Strict as HM
 import Data.Text (Text, pack)
 import qualified GHC.Generics as G
@@ -32,7 +33,7 @@ Example JSON:
 Specification: <http://jsonapi.org/format/#document-links>
 -}
 newtype Links = Links { fromLinks :: HM.HashMap Rel Href }
-  deriving (Show, Eq, ToJSON, FromJSON, G.Generic, Monoid)
+  deriving (Show, Eq, ToJSON, FromJSON, G.Generic, Monoid, Hashable)
 
 type Rel = Text
 type Href = Text

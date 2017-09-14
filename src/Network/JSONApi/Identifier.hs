@@ -14,9 +14,11 @@ module Network.JSONApi.Identifier
 import Control.Lens.TH
 import Data.Aeson (ToJSON, FromJSON, (.=), (.:), (.:?))
 import qualified Data.Aeson as AE
+import Data.Hashable
 import qualified Data.HashMap.Strict as HM
 import Data.Maybe (fromMaybe)
 import Data.Text (Text)
+import qualified GHC.Generics as G
 import Network.JSONApi.Meta (Meta(..))
 import Prelude hiding (id)
 
@@ -32,7 +34,9 @@ data Identifier = Identifier
   { _ident :: Maybe Text
   , _datatype :: Text
   , _metadata :: Meta
-  } deriving (Show, Eq)
+  } deriving (Show, Eq, G.Generic)
+
+instance Hashable Identifier
 
 instance ToJSON Identifier where
   toJSON (Identifier resId resType resMetaData) = AE.object $ addOptional

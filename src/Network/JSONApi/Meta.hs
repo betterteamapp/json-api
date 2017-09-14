@@ -11,6 +11,7 @@ module Network.JSONApi.Meta
 )where
 
 import Data.Aeson (ToJSON, FromJSON, Object, toJSON)
+import Data.Hashable
 import Data.HashMap.Strict as HM
 import Data.Text (Text)
 import qualified GHC.Generics as G
@@ -37,7 +38,7 @@ Example JSON:
 Specification: <http://jsonapi.org/format/#document-meta>
 -}
 newtype Meta = Meta { fromMeta :: Object }
-  deriving (Show, Eq, G.Generic, Monoid, ToJSON, FromJSON)
+  deriving (Show, Eq, G.Generic, Monoid, ToJSON, FromJSON, Hashable)
 
 {- |
 Convienience class for constructing a Meta type

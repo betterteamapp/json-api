@@ -38,6 +38,7 @@ import Data.Aeson
 import Control.Lens.TH
 import qualified Data.Aeson as AE
 import qualified Data.DList as DL
+import Data.Hashable
 import Data.Foldable
 import qualified Data.HashMap.Strict as HM
 import Data.Maybe (catMaybes, fromMaybe)
@@ -80,6 +81,7 @@ data Document f a = Document
 
 deriving instance (Show (f (Resource a))) => Show (Document f a)
 deriving instance (Eq (f (Resource a))) => Eq (Document f a)
+instance (Hashable (f (Resource a))) => Hashable (Document f a)
 
 makeLenses ''Document
 

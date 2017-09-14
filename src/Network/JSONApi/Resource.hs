@@ -1,6 +1,8 @@
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE DefaultSignatures #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE StandaloneDeriving #-}
 {- |
 Module representing a JSON-API resource object.
 
@@ -26,6 +28,7 @@ import Control.Lens.TH
 import Data.Aeson (ToJSON, FromJSON, (.=), (.:), (.:?))
 import qualified Data.Aeson as AE
 import qualified Data.Aeson.Types as AE
+import Data.Hashable
 import qualified Data.HashMap.Strict as HM
 import Data.Maybe (catMaybes, fromMaybe)
 import Data.Monoid
@@ -51,6 +54,8 @@ data Relationship = Relationship
   , _links :: Links
   } deriving (Show, Eq, Generic)
 
+instance Hashable Relationship
+
 relData :: Relationship -> Maybe (RelationshipType Identifier)
 relData = _data
 
@@ -72,10 +77,14 @@ instance AE.FromJSON Relationship where
 newtype Relationships = Relationships { fromRelationships :: HM.HashMap Text Relationship }
   deriving (Show, Eq, Generic, Monoid, ToJSON, FromJSON)
 
+deriving instance Hashable Relationships
+
 data RelationshipType a
   = ToOne (Maybe a)
   | ToMany [a]
-  deriving (Show, Eq, Functor)
+  deriving (Show, Eq, Functor, Generic)
+
+instance Hashable a => Hashable (RelationshipType a)
 
 instance (ToJSON a) => ToJSON (RelationshipType a) where
   toJSON rel = case rel of
@@ -105,6 +114,8 @@ data Resource a = Resource
   } deriving (Show, Eq, Generic, Functor)
 
 makeFields ''Resource
+
+instance Hashable a => Hashable (Resource a)
 
 instance (ToJSON a) => ToJSON (Resource a) where
   toJSON (Resource (Identifier resId resType metaObj) resObj linksObj rels) =
