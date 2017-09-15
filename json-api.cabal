@@ -46,6 +46,7 @@ library
                , unordered-containers
                , url
                , these
+               , transformers
 
   default-language:    Haskell2010
 

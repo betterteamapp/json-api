@@ -28,7 +28,9 @@ import Control.Lens.TH
 import Data.Aeson (ToJSON, FromJSON, (.=), (.:), (.:?))
 import qualified Data.Aeson as AE
 import qualified Data.Aeson.Types as AE
+import Data.Functor.Classes
 import Data.Hashable
+import Data.Hashable.Lifted
 import qualified Data.HashMap.Strict as HM
 import Data.Maybe (catMaybes, fromMaybe)
 import Data.Monoid
@@ -82,8 +84,9 @@ deriving instance Hashable Relationships
 data RelationshipType a
   = ToOne (Maybe a)
   | ToMany [a]
-  deriving (Show, Eq, Functor, Generic)
+  deriving (Show, Eq, Functor, Generic, Generic1)
 
+instance Hashable1 RelationshipType
 instance Hashable a => Hashable (RelationshipType a)
 
 instance (ToJSON a) => ToJSON (RelationshipType a) where
@@ -111,15 +114,35 @@ data Resource a = Resource
   , _resValue :: a
   , _resLinks :: Links
   , _resRelationships :: Relationships
-  } deriving (Show, Eq, Generic, Functor)
+  } deriving (Show, Eq, Generic, Generic1, Functor)
 
 makeFields ''Resource
 
 instance Hashable a => Hashable (Resource a)
+instance Hashable1 Resource
 
-instance (ToJSON a) => ToJSON (Resource a) where
-  toJSON (Resource (Identifier resId resType metaObj) resObj linksObj rels) =
-    AE.object (["type" .= resType, "attributes" .= resObj] ++ optionals)
+instance Eq1 Resource where
+  liftEq eq_ r1 r2 =
+    _resIdentifier r1 == _resIdentifier r2 &&
+    eq_ (_resValue r1) (_resValue r2) &&
+    _resLinks r1 == _resLinks r2 &&
+    _resRelationships r1 == _resRelationships r2
+
+instance Show1 Resource where
+  liftShowsPrec sp _ p f =
+    showString "Resource { identifier =" .
+    showsPrec p (_resIdentifier f) .
+    showString ", value = " .
+    (sp p $ _resValue f) .
+    showString ", links = " .
+    showsPrec p (_resLinks f) .
+    showString ", relationships = " .
+    showsPrec p (_resRelationships f) .
+    showString "}"
+
+instance AE.ToJSON1 Resource where
+  liftToJSON f1 _ (Resource (Identifier resId resType metaObj) resObj linksObj rels) =
+    AE.object (["type" .= resType, "attributes" .= f1 resObj] ++ optionals)
     where
       optionals = catMaybes
         [ ("id" .=) <$> resId
@@ -128,19 +151,26 @@ instance (ToJSON a) => ToJSON (Resource a) where
         , if (HM.null $ fromRelationships rels) then Nothing else Just ("relationships" .= rels)
         ]
 
-instance (FromJSON a) => FromJSON (Resource a) where
-  parseJSON = AE.withObject "resourceObject" $ \v -> do
+instance AE.FromJSON1 Resource where
+  liftParseJSON p1 _ = AE.withObject "resourceObject" $ \v -> do
     id    <- v .:? "id"
     typ   <- v .: "type"
     attrs <- v .: "attributes"
+    attrs' <- p1 attrs
     links <- v .:? "links"
     meta  <- v .:? "meta"
     rels  <- v .:? "relationships"
     return $ Resource
       (Identifier id typ $ fromMaybe mempty meta)
-      attrs
+      attrs'
       (fromMaybe mempty links)
       (fromMaybe mempty rels)
+
+instance (ToJSON a) => ToJSON (Resource a) where
+  toJSON = AE.toJSON1
+
+instance (FromJSON a) => FromJSON (Resource a) where
+  parseJSON = AE.parseJSON1
 
 instance HasIdentifier (Resource a) where
   identifier = _resIdentifier

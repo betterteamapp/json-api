@@ -7,8 +7,6 @@ module Network.JSONApi
 , D.docLinks
 , D.docMeta
 , D.docIncluded
-, D.AnyData (..)
-, D.Single(..)
 , D.ErrorDocument (..)
 , D.errorDoc
 , D.Included
@@ -36,9 +34,7 @@ module Network.JSONApi
 , R.mkRelationships
 , D.oneDoc
 , D.manyDocs
-, D.unsafeDoc
-, D.singleton
-, D.list
+, D.composeDoc
 , D.include
 , D.includes
 , M.mkMeta
