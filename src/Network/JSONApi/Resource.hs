@@ -16,6 +16,7 @@ module Network.JSONApi.Resource
 , resRelationships
 , Relationships(..)
 , ResourcefulEntity (..)
+, fromResource
 , Relationship
 , relData
 , relLinks
@@ -195,10 +196,10 @@ class ResourcefulEntity a where
   resourceRelationships :: a -> Relationships
   resourceRelationships = const mempty
 
-  fromResource :: Resource (ResourceValue a) -> a
+  fromResource' :: Resource (ResourceValue a) -> AE.Parser a
 
-  default fromResource :: (ResourceValue a ~ a) => Resource (ResourceValue a) -> a
-  fromResource = _resValue
+  default fromResource' :: (ResourceValue a ~ a) => Resource (ResourceValue a) -> AE.Parser a
+  fromResource' = return . _resValue
 
   toResource :: a -> Resource (ResourceValue a)
 
@@ -216,8 +217,11 @@ instance ResourcefulEntity (Resource a) where
   resourceIdentifier = _ident . _resIdentifier
   resourceLinks = _resLinks
   resourceRelationships = _resRelationships
-  fromResource = Prelude.id
+  fromResource' = return
   toResource = Prelude.id
+
+fromResource :: ResourcefulEntity a => Resource (ResourceValue a) -> Either String a
+fromResource = AE.parseEither fromResource'
 
 mkRelationships :: [(Text, Relationship)] -> Relationships
 mkRelationships = Relationships . HM.fromList
