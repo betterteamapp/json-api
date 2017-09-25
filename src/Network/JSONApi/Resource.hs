@@ -9,7 +9,7 @@ Module representing a JSON-API resource object.
 Specification: <http://jsonapi.org/format/#document-resource-objects>
 -}
 module Network.JSONApi.Resource
-( Resource
+( Resource(..)
 , resIdentifier
 , resValue
 , resLinks
