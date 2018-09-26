@@ -147,6 +147,10 @@ instance AE.ToJSON1 Resource where
     where
       optionals = catMaybes
         [ ("id" .=) <$> resId
+        , ("attributes" .=) <$> case f1 resObj of
+            AE.Null -> Nothing
+            AE.Object o -> if HM.null o then Nothing else Just $ AE.Object o
+            validish -> Just validish
         , if (HM.null $ fromLinks linksObj) then Nothing else Just ("links" .= linksObj)
         , if (HM.null $ fromMeta metaObj) then Nothing else Just ("meta" .= metaObj)
         , if (HM.null $ fromRelationships rels) then Nothing else Just ("relationships" .= rels)
@@ -156,8 +160,10 @@ instance AE.FromJSON1 Resource where
   liftParseJSON p1 _ = AE.withObject "resourceObject" $ \v -> do
     id    <- v .:? "id"
     typ   <- v .: "type"
-    attrs <- v .: "attributes"
-    attrs' <- p1 attrs
+    attrs <- v .:? "attributes"
+    attrs' <- p1 $ case attrs of
+      Nothing -> AE.Null
+      Just as -> as
     links <- v .:? "links"
     meta  <- v .:? "meta"
     rels  <- v .:? "relationships"
