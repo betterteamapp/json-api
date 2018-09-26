@@ -20,7 +20,8 @@ module Network.JSONApi
 , R.resLinks
 , R.resRelationships
 , R.Relationships
-, R.ResourcefulEntity (..)
+, R.ToResourcefulEntity (..)
+, R.FromResourcefulEntity (..)
 , I.HasIdentifier (..)
 , I.Identifier (..)
 , I.datatype
@@ -49,4 +50,3 @@ import qualified Network.JSONApi.Identifier as I
 import qualified Network.JSONApi.Link as L
 import qualified Network.JSONApi.Meta as M
 import qualified Network.JSONApi.Resource as R
-

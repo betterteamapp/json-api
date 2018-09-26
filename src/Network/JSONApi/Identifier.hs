@@ -39,21 +39,21 @@ data Identifier = Identifier
 instance Hashable Identifier
 
 instance ToJSON Identifier where
-  toJSON (Identifier resId resType resMetaData) = AE.object $ addOptional
-    [ "id"            .= resId
-    , "type"          .= resType
-    ]
+  toJSON (Identifier resId resType resMetaData) =
+    AE.object $ addOptional ["id" .= resId, "type" .= resType]
     where
-      addOptional l = if HM.null (fromMeta resMetaData)
-        then l
-        else (("meta" .= resMetaData) : l)
+      addOptional l =
+        if HM.null (fromMeta resMetaData)
+          then l
+          else (("meta" .= resMetaData) : l)
 
 instance FromJSON Identifier where
-  parseJSON = AE.withObject "resourceIdentifier" $ \v -> do
-    id    <- v .: "id"
-    typ   <- v .: "type"
-    meta  <- v .:? "meta"
-    return $ Identifier id typ (fromMaybe mempty meta)
+  parseJSON =
+    AE.withObject "resourceIdentifier" $ \v -> do
+      id <- v .: "id"
+      typ <- v .: "type"
+      meta <- v .:? "meta"
+      return $ Identifier id typ (fromMaybe mempty meta)
 
 
 {- |
@@ -61,6 +61,7 @@ Typeclass indicating how to access an 'Identifier' for
 a given datatype
 -}
 class HasIdentifier a where
+  resourceType :: a -> Text
   identifier :: a -> Identifier
 
 makeLenses ''Identifier

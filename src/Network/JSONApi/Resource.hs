@@ -1,7 +1,9 @@
 {-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE DefaultSignatures #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {- |
 Module representing a JSON-API resource object.
@@ -15,7 +17,8 @@ module Network.JSONApi.Resource
 , resLinks
 , resRelationships
 , Relationships(..)
-, ResourcefulEntity (..)
+, ToResourcefulEntity (..)
+, FromResourcefulEntity(..)
 , fromResource
 , Relationship
 , relData
@@ -25,6 +28,7 @@ module Network.JSONApi.Resource
 , mkRelationships
 ) where
 
+import Control.Applicative
 import Control.Lens.TH
 import Data.Aeson (ToJSON, FromJSON, (.=), (.:), (.:?))
 import qualified Data.Aeson as AE
@@ -78,7 +82,7 @@ instance AE.FromJSON Relationship where
     return $ Relationship d (fromMaybe mempty l)
 
 newtype Relationships = Relationships { fromRelationships :: HM.HashMap Text Relationship }
-  deriving (Show, Eq, Generic, Monoid, ToJSON, FromJSON)
+  deriving (Show, Eq, Generic, Semigroup, Monoid, ToJSON, FromJSON)
 
 deriving instance Hashable Relationships
 
@@ -161,9 +165,9 @@ instance AE.FromJSON1 Resource where
     id    <- v .:? "id"
     typ   <- v .: "type"
     attrs <- v .:? "attributes"
-    attrs' <- p1 $ case attrs of
-      Nothing -> AE.Null
-      Just as -> as
+    attrs' <- case attrs of
+      Nothing -> p1 AE.Null <|> p1 (AE.Object HM.empty)
+      Just as -> p1 as
     links <- v .:? "links"
     meta  <- v .:? "meta"
     rels  <- v .:? "relationships"
@@ -180,53 +184,52 @@ instance (FromJSON a) => FromJSON (Resource a) where
   parseJSON = AE.parseJSON1
 
 instance HasIdentifier (Resource a) where
+  resourceType = _datatype . _resIdentifier
   identifier = _resIdentifier
 
 {- |
 A typeclass for decorating an entity with JSON API properties
 -}
-class ResourcefulEntity a where
+class (Applicative m, HasIdentifier a) => ToResourcefulEntity m a where
   type ResourceValue a :: *
   type ResourceValue a = a
-  resourceType :: a -> Text
 
-  resourceIdentifier :: a -> Maybe Text
-  resourceIdentifier = const Nothing
+  resourceIdentifier :: a -> m (Maybe Text)
+  resourceIdentifier = pure . const Nothing
 
-  resourceLinks :: a -> Links
-  resourceLinks = const mempty
+  resourceLinks :: a -> m Links
+  resourceLinks = pure . const mempty
 
-  resourceMetaData :: a -> Meta
-  resourceMetaData = const mempty
+  resourceMetaData :: a -> m Meta
+  resourceMetaData = pure . const mempty
 
-  resourceRelationships :: a -> Relationships
-  resourceRelationships = const mempty
+  resourceRelationships :: a -> m Relationships
+  resourceRelationships = pure . const mempty
 
+  toResource :: a -> m (Resource (ResourceValue a))
+  default toResource :: (ResourceValue a ~ a) => a -> m (Resource (ResourceValue a))
+  toResource a = Resource
+    <$> (Identifier <$> resourceIdentifier a <*> pure (resourceType a) <*> resourceMetaData a)
+    <*> pure a
+    <*> resourceLinks a
+    <*> resourceRelationships a
+
+class FromResourcefulEntity a where
   fromResource' :: Resource (ResourceValue a) -> AE.Parser a
-
   default fromResource' :: (ResourceValue a ~ a) => Resource (ResourceValue a) -> AE.Parser a
   fromResource' = return . _resValue
 
-  toResource :: a -> Resource (ResourceValue a)
-
-  default toResource :: (ResourceValue a ~ a) => a -> Resource (ResourceValue a)
-  toResource a =
-    Resource
-      (Identifier (resourceIdentifier a) (resourceType a) (resourceMetaData a))
-      a
-      (resourceLinks a)
-      (resourceRelationships a)
-
-instance ResourcefulEntity (Resource a) where
+instance Applicative m => ToResourcefulEntity m (Resource a) where
   type ResourceValue (Resource a) = a
-  resourceType = _datatype . _resIdentifier
-  resourceIdentifier = _ident . _resIdentifier
-  resourceLinks = _resLinks
-  resourceRelationships = _resRelationships
-  fromResource' = return
-  toResource = Prelude.id
+  resourceIdentifier = pure . _ident . _resIdentifier
+  resourceLinks = pure . _resLinks
+  resourceRelationships = pure . _resRelationships
+  toResource = pure
 
-fromResource :: ResourcefulEntity a => Resource (ResourceValue a) -> Either String a
+instance FromResourcefulEntity (Resource a) where
+  fromResource' = return
+
+fromResource :: FromResourcefulEntity a => Resource (ResourceValue a) -> Either String a
 fromResource = AE.parseEither fromResource'
 
 mkRelationships :: [(Text, Relationship)] -> Relationships

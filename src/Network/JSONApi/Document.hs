@@ -40,7 +40,7 @@ import qualified GHC.Generics as G
 import qualified Network.JSONApi.Error as E
 import Network.JSONApi.Link as L
 import Network.JSONApi.Meta as M
-import Network.JSONApi.Resource (Resource, ResourcefulEntity)
+import Network.JSONApi.Resource (Resource, ToResourcefulEntity, FromResourcefulEntity)
 import qualified Network.JSONApi.Resource as R
 
 {- |
@@ -52,9 +52,9 @@ or a list of resources. See 'Resource' for the construction.
 For more information see: <http://jsonapi.org/format/#document-top-level>
 -}
 data Document f a = Document
-  { _docData  ::  Compose f R.Resource a
-  , _docLinks ::  Links
-  , _docMeta  ::  Meta
+  { _docData :: Compose f R.Resource a
+  , _docLinks :: Links
+  , _docMeta :: Meta
   , _docIncluded :: [Value]
   } deriving (G.Generic, G.Generic1)
 
@@ -120,7 +120,7 @@ constrain the 'Value' to a heterogeneous list of Resource types.
 See 'mkIncludedResource' for creating 'Included' types.
 -}
 newtype Included = Included (DL.DList Value)
-  deriving (Show, Monoid)
+  deriving (Show, Semigroup, Monoid)
 
 getIncluded :: Included -> [Value]
 getIncluded (Included d) = DL.toList d
@@ -128,14 +128,14 @@ getIncluded (Included d) = DL.toList d
 {- |
 Constructor function for the Document data type.
 -}
-oneDoc :: (ToJSON (R.ResourceValue a), ResourcefulEntity a) => a -> Document Identity (R.ResourceValue a)
-oneDoc = composeDoc . pure . R.toResource
+oneDoc :: (ToJSON (R.ResourceValue a), ToResourcefulEntity m a) => a -> m (Document Identity (R.ResourceValue a))
+oneDoc = fmap (composeDoc . pure) . R.toResource
 
 {- |
 Constructor function for the Document data type.
 -}
-manyDocs :: (ToJSON a, ResourcefulEntity a) => [a] -> Document [] (R.ResourceValue a)
-manyDocs = composeDoc . fmap R.toResource
+manyDocs :: (ToJSON a, Monad m, ToResourcefulEntity m a) => [a] -> m (Document [] (R.ResourceValue a))
+manyDocs = fmap composeDoc . mapM R.toResource
 
 {- |
 Constructor function for the Document data type. It is possible to create an
@@ -149,15 +149,15 @@ composeDoc functor = Document (Compose functor) mempty mempty mempty
 Supports building compound documents
 <http://jsonapi.org/format/#document-compound-documents>
 -}
-include :: (AE.ToJSON (R.ResourceValue a), ResourcefulEntity a) => a -> Included
-include = Included . DL.singleton . AE.toJSON . R.toResource
+include :: (AE.ToJSON (R.ResourceValue a), ToResourcefulEntity m a) => a -> m Included
+include = fmap (Included . DL.singleton . AE.toJSON) . R.toResource
 
 {- |
 Supports building compound documents
 <http://jsonapi.org/format/#document-compound-documents>
 -}
-includes :: (Foldable f, AE.ToJSON (R.ResourceValue a), ResourcefulEntity a) => f a -> Included
-includes = Included . DL.fromList . fmap (AE.toJSON . R.toResource) . toList
+includes :: (Foldable f, AE.ToJSON (R.ResourceValue a), Monad m, ToResourcefulEntity m a) => f a -> m Included
+includes = fmap (Included . DL.fromList . fmap AE.toJSON) . mapM R.toResource . toList
 
 {- |
 The 'ErrorDocument' type represents the alternative form of the top-level

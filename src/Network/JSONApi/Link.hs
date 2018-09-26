@@ -13,9 +13,10 @@ module Network.JSONApi.Link
 import Data.Aeson (ToJSON, FromJSON)
 import Data.Hashable
 import qualified Data.HashMap.Strict as HM
-import Data.Text (Text, pack)
+import Data.Text (Text)
+import Data.Text.Encoding (decodeUtf8)
 import qualified GHC.Generics as G
-import Network.URL (URL, exportURL)
+import URI.ByteString (URIRef, serializeURIRef')
 
 {- |
 Type representing a JSON-API link object.
@@ -33,7 +34,7 @@ Example JSON:
 Specification: <http://jsonapi.org/format/#document-links>
 -}
 newtype Links = Links { fromLinks :: HM.HashMap Rel Href }
-  deriving (Show, Eq, ToJSON, FromJSON, G.Generic, Monoid, Hashable)
+  deriving (Show, Eq, ToJSON, FromJSON, G.Generic, Semigroup, Monoid, Hashable)
 
 type Rel = Text
 type Href = Text
@@ -41,8 +42,8 @@ type Href = Text
 {- |
 Constructor function for building Links
 -}
-mkLinks :: [(Rel, URL)] -> Links
+mkLinks :: [(Rel, URIRef a)] -> Links
 mkLinks = Links . HM.fromList . map buildLink
 
-buildLink :: (Rel, URL) -> (Rel, Href)
-buildLink (key, url) = (key, pack (exportURL url))
+buildLink :: (Rel, URIRef a) -> (Rel, Href)
+buildLink (key, url) = (key, decodeUtf8 $ serializeURIRef' url)
