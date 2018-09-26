@@ -13,6 +13,7 @@ module Network.JSONApi.Meta
 import Data.Aeson (ToJSON, FromJSON, Object, toJSON)
 import Data.Hashable
 import Data.HashMap.Strict as HM
+import Data.Semigroup
 import Data.Text (Text)
 import qualified GHC.Generics as G
 

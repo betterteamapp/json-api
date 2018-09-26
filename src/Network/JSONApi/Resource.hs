@@ -39,6 +39,7 @@ import Data.Hashable.Lifted
 import qualified Data.HashMap.Strict as HM
 import Data.Maybe (catMaybes, fromMaybe)
 import Data.Monoid
+import Data.Semigroup
 import Data.Text (Text)
 import Data.These (These(..))
 import GHC.Generics hiding (Meta)

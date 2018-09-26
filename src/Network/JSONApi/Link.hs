@@ -12,6 +12,7 @@ module Network.JSONApi.Link
 
 import Data.Aeson (ToJSON, FromJSON)
 import Data.Hashable
+import Data.Semigroup
 import qualified Data.HashMap.Strict as HM
 import Data.Text (Text)
 import Data.Text.Encoding (decodeUtf8)
