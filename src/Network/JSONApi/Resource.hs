@@ -47,7 +47,6 @@ import Network.JSONApi.Identifier (HasIdentifier (..), Identifier (..))
 import Network.JSONApi.Link (Links(..))
 import Network.JSONApi.Meta (Meta(..))
 import Prelude hiding (id)
-import qualified Prelude
 
 {- |
 A type representing the Relationship between 2 entities

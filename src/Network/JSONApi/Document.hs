@@ -36,6 +36,7 @@ import Data.Foldable
 import Data.Functor.Classes
 import qualified Data.HashMap.Strict as HM
 import Data.Maybe (catMaybes, fromMaybe)
+import Data.Semigroup
 import qualified GHC.Generics as G
 import qualified Network.JSONApi.Error as E
 import Network.JSONApi.Link as L
