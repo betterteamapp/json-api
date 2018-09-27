@@ -4,11 +4,13 @@ Module representing a JSON-API link object.
 Specification: <http://jsonapi.org/format/#document-links>
 -}
 module Network.JSONApi.Link
-( Links(..)
-, Rel
-, Href
-, mkLinks
-) where
+  ( Links(..)
+  , Rel
+  , Href
+  , mkLinks
+  , buildLink
+  , unsafeLinks
+  ) where
 
 import Data.Aeson (ToJSON, FromJSON)
 import Data.Hashable
@@ -44,7 +46,10 @@ type Href = Text
 Constructor function for building Links
 -}
 mkLinks :: [(Rel, URIRef a)] -> Links
-mkLinks = Links . HM.fromList . map buildLink
+mkLinks =  unsafeLinks . map buildLink
 
 buildLink :: (Rel, URIRef a) -> (Rel, Href)
 buildLink (key, url) = (key, decodeUtf8 $ serializeURIRef' url)
+
+unsafeLinks :: [(Rel, Text)] -> Links
+unsafeLinks = Links . HM.fromList
