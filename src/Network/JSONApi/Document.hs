@@ -20,11 +20,17 @@ module Network.JSONApi.Document
   , composeDoc
   , include
   , includes
+  , SparseFields(..)
+  , queryParamSparseFields
+  , makeSparseDocument
+  -- , makeSparseResource
   ) where
 
 import Data.Aeson
        (FromJSON, FromJSON1(..), ToJSON, ToJSON1(..), Value, (.:), (.:?),
         (.=), parseJSON1, toJSON1)
+import Control.Monad
+import Control.Lens hiding ((.=))
 import Control.Lens.TH
 import qualified Data.Aeson as AE
 import qualified Data.DList as DL
@@ -35,14 +41,18 @@ import Data.Hashable.Lifted
 import Data.Foldable
 import Data.Functor.Classes
 import qualified Data.HashMap.Strict as HM
+import qualified Data.HashSet as HS
 import Data.Maybe (catMaybes, fromMaybe)
 import Data.Semigroup
+import Data.Text (Text)
+import qualified Data.Text as T
 import qualified GHC.Generics as G
 import qualified Network.JSONApi.Error as E
 import Network.JSONApi.Link as L
 import Network.JSONApi.Meta as M
 import Network.JSONApi.Resource (Resource, ToResourcefulEntity, FromResourcefulEntity)
 import qualified Network.JSONApi.Resource as R
+import qualified Network.JSONApi.Identifier as I
 
 {- |
 The 'Document' type represents the top-level JSON-API requirement.
@@ -56,7 +66,7 @@ data Document f a = Document
   { _docData :: Compose f R.Resource a
   , _docLinks :: Links
   , _docMeta :: Meta
-  , _docIncluded :: [Value]
+  , _docIncluded :: [R.Resource Value]
   } deriving (G.Generic, G.Generic1)
 
 instance (Show1 f, Show a) => Show (Document f a) where
@@ -85,6 +95,8 @@ instance (Hashable1 f, Hashable a) => Hashable (Document f a) where
     _docData x `hashWithSalt`
     _docLinks x `hashWithSalt`
     _docMeta x `hashWithSalt` _docIncluded x
+
+deriving instance (Functor f) => Functor (Document f)
 
 makeLenses ''Document
 
@@ -120,10 +132,10 @@ No data constructors for this type are exported as we need to
 constrain the 'Value' to a heterogeneous list of Resource types.
 See 'mkIncludedResource' for creating 'Included' types.
 -}
-newtype Included = Included (DL.DList Value)
+newtype Included = Included (DL.DList (Resource Value))
   deriving (Show, Semigroup, Monoid)
 
-getIncluded :: Included -> [Value]
+getIncluded :: Included -> [Resource Value]
 getIncluded (Included d) = DL.toList d
 
 {- |
@@ -151,14 +163,56 @@ Supports building compound documents
 <http://jsonapi.org/format/#document-compound-documents>
 -}
 include :: (AE.ToJSON (R.ResourceValue a), ToResourcefulEntity m a) => a -> m Included
-include = fmap (Included . DL.singleton . AE.toJSON) . R.toResource
+include = fmap (Included . DL.singleton . fmap AE.toJSON) . R.toResource
 
 {- |
 Supports building compound documents
 <http://jsonapi.org/format/#document-compound-documents>
 -}
 includes :: (Foldable f, AE.ToJSON (R.ResourceValue a), Monad m, ToResourcefulEntity m a) => f a -> m Included
-includes = fmap (Included . DL.fromList . fmap AE.toJSON) . mapM R.toResource . toList
+includes = fmap (Included . DL.fromList . fmap (fmap AE.toJSON)) . mapM R.toResource . toList
+
+newtype SparseFields = SparseFields
+  { sparseFields :: HM.HashMap Text (HS.HashSet Text)
+  }
+
+queryParamSparseFields :: [(Text, Text)] -> SparseFields
+queryParamSparseFields fs =
+  SparseFields $
+  HM.fromList [(k, s) | f@(k, _) <- fs, s <- toList $ pullField f]
+  where
+    pullField (wrappedK, v) = do
+      k' <- T.stripPrefix "fields[" wrappedK
+      void $ T.stripSuffix "]" k'
+      return $ HS.fromList $ T.splitOn "," v
+
+{- |
+Documents MUST respect sparse field requests, so this provides the necessary machinery.
+
+> GET /articles?include=author&fields[articles]=title,body&fields[people]=name HTTP/1.1
+
+-}
+-- Only types noted in the hashmap are filtered
+makeSparseResource :: (ToJSON a) => SparseFields -> Resource a -> Resource Value
+makeSparseResource (SparseFields subsets) x =
+  case subsets ^? at (x ^. R.resIdentifier . I.datatype) . _Just of
+    Nothing -> x & R.resValue .~ o
+    Just filters ->
+      x & R.resValue .~
+      AE.Object (HM.filterWithKey (\k _ -> HS.member k filters) j)
+  where
+    o@(AE.Object j) = x ^. R.resValue . to AE.toJSON
+
+{- |
+Documents MUST respect sparse field requests, so this provides the necessary machinery.
+
+> GET /articles?include=author&fields[articles]=title,body&fields[people]=name HTTP/1.1
+
+-}
+makeSparseDocument :: (Functor f, ToJSON a) => SparseFields -> Document f a -> Document f Value
+makeSparseDocument subsets d = d
+  & docData . _Wrapped . mapped %~ makeSparseResource subsets
+  & docIncluded . mapped %~ makeSparseResource subsets
 
 {- |
 The 'ErrorDocument' type represents the alternative form of the top-level
