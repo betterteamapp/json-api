@@ -2,12 +2,13 @@ module Network.JSONApi.ResourceSpec where
 
 import qualified Data.Aeson as AE
 import qualified Data.ByteString.Lazy.Char8 as BS
+import Data.Functor.Identity
 import Data.Maybe (isJust, fromJust)
 import Data.Monoid
 import Data.Text (Text, pack)
 import GHC.Generics (Generic)
 import Network.JSONApi
-import Network.URL (URL, importURL)
+import URI.ByteString.QQ (uri, relativeRef)
 import TestHelpers (prettyEncode)
 import Test.Hspec
 
@@ -18,8 +19,8 @@ spec :: Spec
 spec =
   describe "JSON serialization" $
     it "can be encoded and decoded from JSON" $ do
-      let encodedJson = BS.unpack . prettyEncode $ toResource testObject
-      let decodedJson = AE.decode (BS.pack encodedJson) :: Maybe (Resource TestObject)
+      let encodedJson = BS.unpack . prettyEncode $ runIdentity $ toResource testObject
+      let decodedJson = AE.decode (BS.pack encodedJson) :: Maybe (Resource Existing TestObject)
       isJust decodedJson `shouldBe` True
       {- putStrLn encodedJson -}
       {- putStrLn $ show . fromJust $ decodedJson -}
@@ -34,12 +35,16 @@ data TestObject = TestObject
 instance AE.ToJSON TestObject
 instance AE.FromJSON TestObject
 
-instance ResourcefulEntity TestObject where
-  resourceIdentifier = pack . show . myId
+instance IdentifierContext TestObject where
   resourceType _ = "TestObject"
-  resourceLinks _ = Just myResourceLinks
-  resourceMetaData _ = Just myResourceMetaData
-  resourceRelationships _ = Just myRelationshipss
+
+instance HasId TestObject where
+  resourceId = pack . show . myId
+
+instance (Applicative m) => ToResourcefulEntity m TestObject where
+  resourceLinks _ = pure myResourceLinks
+  resourceMetadata _ = pure myResourceMetaData
+  resourceRelationships _ = pure myRelationshipss
 
 data Pagination = Pagination
   { currentPage :: Int
@@ -53,31 +58,28 @@ instance MetaObject Pagination where
 
 myRelationshipss :: Relationships
 myRelationshipss =
-  mkRelationships relationship <> mkRelationships otherRelationship
+  mkRelationships [ ("FriendOfTestObject", relationship)
+                  , ("CousinOfTestObject", otherRelationship)
+                  ]
 
 relationship :: Relationship
-relationship =
-  fromJust $ mkRelationship
-    (Just $ Identifier "42" "FriendOfTestObject" Nothing)
-    (Just myResourceLinks)
+relationship = mkRelationship $ These
+  (ToOne $ pure $ Identifier (pure "42") "TestObject" mempty)
+  myResourceLinks
 
 otherRelationship :: Relationship
-otherRelationship =
-  fromJust $ mkRelationship
-    (Just $ Identifier "49" "CousinOfTestObject" Nothing)
-    (Just myResourceLinks)
+otherRelationship = mkRelationship $ These
+  (ToMany $ pure $ Identifier (pure "49") "TestObject" mempty)
+  myResourceLinks
 
 myResourceLinks :: Links
 myResourceLinks =
-  mkLinks [ ("self", toURL "/me")
-          , ("related", toURL "/tacos/4")
+  mkLinks [ ("self", [relativeRef|/me|])
+          , ("related", [relativeRef|/tacos/4|])
           ]
 
 myResourceMetaData :: Meta
 myResourceMetaData = mkMeta (Pagination 1 14)
-
-toURL :: String -> URL
-toURL = fromJust . importURL
 
 testObject :: TestObject
 testObject = TestObject 1 "Fred Armisen" 49 "Pizza"

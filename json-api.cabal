@@ -95,8 +95,11 @@ test-suite json-api-test
   default-extensions:
     DeriveGeneric
     GeneralizedNewtypeDeriving
+    FlexibleInstances
+    MultiParamTypeClasses
     OverloadedStrings
     RecordWildCards
+    QuasiQuotes
 
   ghc-options:
     -Wall

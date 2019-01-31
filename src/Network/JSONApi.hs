@@ -15,6 +15,8 @@ module Network.JSONApi
 , R.Relationship
 , R.RelationshipType(..)
 , R.Resource
+, I.New
+, I.Existing
 , R.resIdentifier
 , R.resValue
 , R.resLinks
@@ -22,7 +24,8 @@ module Network.JSONApi
 , R.Relationships
 , R.ToResourcefulEntity (..)
 , R.FromResourcefulEntity (..)
-, I.HasIdentifier (..)
+, I.HasId (..)
+, I.IdentifierContext(..)
 , I.Identifier (..)
 , I.datatype
 , I.ident

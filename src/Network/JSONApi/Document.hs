@@ -1,7 +1,9 @@
 {-# LANGUAGE DeriveFunctor    #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE TypeFamilies #-}
 {- |
 Contains representations of the top-level JSON-API document structure.
 -}
@@ -62,14 +64,16 @@ or a list of resources. See 'Resource' for the construction.
 
 For more information see: <http://jsonapi.org/format/#document-top-level>
 -}
-data Document f a = Document
-  { _docData :: Compose f R.Resource a
+data Document (st :: *) (f :: * -> *) (a :: *) = Document
+  { _docData :: Compose f (R.Resource st) a
   , _docLinks :: Links
   , _docMeta :: Meta
-  , _docIncluded :: [R.Resource Value]
+  , _docIncluded :: [R.Resource I.Existing Value]
   } deriving (G.Generic, G.Generic1)
 
-instance (Show1 f, Show a) => Show (Document f a) where
+makeLenses ''Document
+
+instance (Show1 f, Show a, Show1 (I.ResourceState st)) => Show (Document st f a) where
   showsPrec n v =
     showString "Document {data = " .
     showsPrec1 n (_docData v) .
@@ -81,26 +85,24 @@ instance (Show1 f, Show a) => Show (Document f a) where
     showsPrec n (_docIncluded v) .
     showString "}"
 
-instance (Eq1 f, Eq a) => Eq (Document f a) where
+instance (Eq1 f, Eq a, Eq1 (I.ResourceState st)) => Eq (Document st f a) where
   (==) a b =
     eq1 (_docData a) (_docData b) &&
     _docLinks a == _docLinks b &&
     _docMeta a == _docMeta b &&
     _docIncluded a == _docIncluded b
 
-instance (Functor f, Hashable1 f) => Hashable1 (Document f)
-instance (Hashable1 f, Hashable a) => Hashable (Document f a) where
+instance (Functor f, Hashable1 f, Hashable1 (I.ResourceState st)) => Hashable1 (Document st f)
+instance (Hashable1 f, Hashable a, Hashable1 (I.ResourceState st)) => Hashable (Document st f a) where
   hashWithSalt s x =
     s `hashWithSalt1`
     _docData x `hashWithSalt`
     _docLinks x `hashWithSalt`
     _docMeta x `hashWithSalt` _docIncluded x
 
-deriving instance (Functor f) => Functor (Document f)
+deriving instance (Functor f) => Functor (Document st f)
 
-makeLenses ''Document
-
-instance (ToJSON1 f, ToJSON a) => ToJSON (Document f a) where
+instance (ToJSON1 f, ToJSON a, ToJSON1 (Resource st)) => ToJSON (Document st f a) where
   toJSON (Document vs links meta included) = AE.object
     (("data" .= toJSON1 vs) : optionals)
     where
@@ -110,7 +112,7 @@ instance (ToJSON1 f, ToJSON a) => ToJSON (Document f a) where
         , if (null included) then Nothing else Just ("included" .= included)
         ]
 
-instance (FromJSON1 f, FromJSON a) => FromJSON (Document f a) where
+instance (FromJSON1 f, FromJSON a, FromJSON1 (Resource st)) => FromJSON (Document st f a) where
   parseJSON = AE.withObject "document" $ \v -> do
     dat <- v .:  "data"
     d <- parseJSON1 dat
@@ -132,22 +134,22 @@ No data constructors for this type are exported as we need to
 constrain the 'Value' to a heterogeneous list of Resource types.
 See 'mkIncludedResource' for creating 'Included' types.
 -}
-newtype Included = Included (DL.DList (Resource Value))
+newtype Included = Included (DL.DList (Resource I.Existing Value))
   deriving (Show, Semigroup, Monoid)
 
-getIncluded :: Included -> [Resource Value]
+getIncluded :: Included -> [Resource I.Existing Value]
 getIncluded (Included d) = DL.toList d
 
 {- |
 Constructor function for the Document data type.
 -}
-oneDoc :: (ToJSON (R.ResourceValue a), ToResourcefulEntity m a) => a -> m (Document Identity (R.ResourceValue a))
+oneDoc :: (ToJSON (R.ResourceValue a), ToResourcefulEntity m a) => a -> m (Document (R.ResourceIdState a) Identity (R.ResourceValue a))
 oneDoc = fmap (composeDoc . pure) . R.toResource
 
 {- |
 Constructor function for the Document data type.
 -}
-manyDocs :: (ToJSON a, Monad m, ToResourcefulEntity m a) => [a] -> m (Document [] (R.ResourceValue a))
+manyDocs :: (ToJSON a, Monad m, ToResourcefulEntity m a) => [a] -> m (Document (R.ResourceIdState a) [] (R.ResourceValue a))
 manyDocs = fmap composeDoc . mapM R.toResource
 
 {- |
@@ -155,36 +157,50 @@ Constructor function for the Document data type. It is possible to create an
 invalid Document if the provided @f@ doesn't serialize to either single
 @ResourceValue@ or an array of @ResourceValue@s
 -}
-composeDoc :: f (Resource a) -> Document f a
+composeDoc :: f (Resource st a) -> Document st f a
 composeDoc functor = Document (Compose functor) mempty mempty mempty
 
 {- |
 Supports building compound documents
 <http://jsonapi.org/format/#document-compound-documents>
 -}
-include :: (AE.ToJSON (R.ResourceValue a), ToResourcefulEntity m a) => a -> m Included
+include ::
+     ( AE.ToJSON (R.ResourceValue a)
+     , ToResourcefulEntity m a
+     , R.ResourceIdState a ~ I.Existing
+     )
+  => a
+  -> m Included
 include = fmap (Included . DL.singleton . fmap AE.toJSON) . R.toResource
 
 {- |
 Supports building compound documents
 <http://jsonapi.org/format/#document-compound-documents>
 -}
-includes :: (Foldable f, AE.ToJSON (R.ResourceValue a), Monad m, ToResourcefulEntity m a) => f a -> m Included
+includes ::
+     ( Foldable f
+     , AE.ToJSON (R.ResourceValue a)
+     , Monad m
+     , ToResourcefulEntity m a
+     , R.ResourceIdState a ~ I.Existing
+     )
+  => f a
+  -> m Included
 includes = fmap (Included . DL.fromList . fmap (fmap AE.toJSON)) . mapM R.toResource . toList
 
 newtype SparseFields = SparseFields
   { sparseFields :: HM.HashMap Text (HS.HashSet Text)
-  }
+  } deriving (Show, Eq)
 
 queryParamSparseFields :: [(Text, Text)] -> SparseFields
 queryParamSparseFields fs =
   SparseFields $
-  HM.fromList [(k, s) | f@(k, _) <- fs, s <- toList $ pullField f]
+  HM.fromList [r | f <- fs, r <- toList $ pullField f]
   where
     pullField (wrappedK, v) = do
       k' <- T.stripPrefix "fields[" wrappedK
-      void $ T.stripSuffix "]" k'
-      return $ HS.fromList $ T.splitOn "," v
+      k <- T.stripSuffix "]" k'
+      return (k, HS.fromList $ T.splitOn "," v)
 
 {- |
 Documents MUST respect sparse field requests, so this provides the necessary machinery.
@@ -193,9 +209,9 @@ Documents MUST respect sparse field requests, so this provides the necessary mac
 
 -}
 -- Only types noted in the hashmap are filtered
-makeSparseResource :: (ToJSON a) => SparseFields -> Resource a -> Resource Value
+makeSparseResource :: (ToJSON a) => SparseFields -> Resource st a -> Resource st Value
 makeSparseResource (SparseFields subsets) x =
-  case subsets ^? at (x ^. R.resIdentifier . I.datatype) . _Just of
+  case HM.lookup (x ^. R.resIdentifier . I.datatype) subsets of
     Nothing -> x & R.resValue .~ o
     Just filters ->
       x & R.resValue .~
@@ -209,7 +225,7 @@ Documents MUST respect sparse field requests, so this provides the necessary mac
 > GET /articles?include=author&fields[articles]=title,body&fields[people]=name HTTP/1.1
 
 -}
-makeSparseDocument :: (Functor f, ToJSON a) => SparseFields -> Document f a -> Document f Value
+makeSparseDocument :: (Functor f, ToJSON a) => SparseFields -> Document st f a -> Document st f Value
 makeSparseDocument subsets d = d
   & docData . _Wrapped . mapped %~ makeSparseResource subsets
   & docIncluded . mapped %~ makeSparseResource subsets

@@ -3,17 +3,20 @@ module TestHelpers where
 import qualified Data.Aeson as AE
 import qualified Data.Aeson.Encode.Pretty as AE
 import qualified Data.ByteString.Lazy.Char8 as BS
-import Data.Maybe (fromJust)
+import Data.Either (fromRight)
 import Data.Text (Text, pack)
 import GHC.Generics (Generic)
 import Network.JSONApi
-import Network.URL (URL, importURL)
+import Network.JSONApi.Resource
+import Network.JSONApi.Identifier
+import URI.ByteString (URIRef, Absolute, parseURI, strictURIParserOptions)
+import URI.ByteString.QQ (uri, relativeRef)
 
 prettyEncode :: AE.ToJSON a => a -> BS.ByteString
 prettyEncode = AE.encodePretty' prettyConfig
 
 prettyConfig :: AE.Config
-prettyConfig = AE.Config { AE.confIndent = 2, AE.confCompare = mempty }
+prettyConfig = AE.defConfig { AE.confIndent = AE.Spaces 2, AE.confCompare = mempty }
 
 class HasIdentifiers a where
   uniqueId :: a -> Int
@@ -28,15 +31,11 @@ data TestResource = TestResource
 
 instance AE.ToJSON TestResource
 instance AE.FromJSON TestResource
-instance ResourcefulEntity TestResource where
-  resourceIdentifier = pack . show . myId
+instance Applicative m => ToResourcefulEntity m TestResource where
+instance HasId TestResource where
+  resourceId = pack . show . myId
+instance IdentifierContext TestResource where
   resourceType _ = "testResource"
-  resourceLinks _ = Nothing
-  resourceMetaData _ = Nothing
-  resourceRelationships _ = Nothing
-instance HasIdentifiers TestResource where
-  uniqueId = myId
-  typeDescriptor _ = "TestResource"
 
 data OtherTestResource = OtherTestResource
   { myFavoriteNumber :: Int
@@ -47,15 +46,11 @@ data OtherTestResource = OtherTestResource
 
 instance AE.ToJSON OtherTestResource
 instance AE.FromJSON OtherTestResource
-instance ResourcefulEntity OtherTestResource where
-  resourceIdentifier = pack . show . myFavoriteNumber
+instance Applicative m => ToResourcefulEntity m OtherTestResource
+instance HasId OtherTestResource where
+  resourceId = pack . show . myFavoriteNumber
+instance IdentifierContext OtherTestResource where
   resourceType _ = "otherTestResource"
-  resourceLinks _ = Nothing
-  resourceMetaData _ = Nothing
-  resourceRelationships _ = Nothing
-instance HasIdentifiers OtherTestResource where
-  uniqueId = myFavoriteNumber
-  typeDescriptor _ = "OtherTestResource"
 
 data TestMetaObject = TestMetaObject
   { totalPages :: Int
@@ -67,20 +62,22 @@ instance AE.FromJSON TestMetaObject
 instance MetaObject TestMetaObject where
   typeName _ = "importantData"
 
-toResource' :: (HasIdentifiers a) => a
-            -> Maybe Links
-            -> Maybe Meta
-            -> Resource a
+toResource' :: (HasId a, IdentifierContext a) => a
+            -> Links
+            -> Meta
+            -> Resource Existing a
 toResource' obj links meta =
   Resource
-    (Identifier (pack . show . uniqueId $ obj) (typeDescriptor obj) meta)
+    ((existing obj) { _metadata = meta })
     obj
     links
-    Nothing
+    mempty
 
 linksObj :: Links
-linksObj = mkLinks [ ("self", toURL "/things/1")
-                   , ("related", toURL "http://some.domain.com/other/things/1")
+linksObj = mkLinks [ ("self", [relativeRef|/things/1|])
+                   ]
+           <>
+           mkLinks [ ("related", [uri|http://some.domain.com/other/things/1|])
                    ]
 
 testObject :: TestResource
@@ -98,8 +95,8 @@ testMetaObj = mkMeta (TestMetaObject 3 True)
 emptyMeta :: Maybe Meta
 emptyMeta = Nothing
 
-toURL :: String -> URL
-toURL = fromJust . importURL
+toURL :: String -> URIRef Absolute
+toURL s = fromRight (error "It wasn't right") $ parseURI strictURIParserOptions (BS.toStrict $ BS.pack $ s)
 
 emptyLinks :: Maybe Links
 emptyLinks = Nothing
