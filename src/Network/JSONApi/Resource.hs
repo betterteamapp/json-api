@@ -68,13 +68,13 @@ about a related resource.
 Specification: <http://jsonapi.org/format/#document-resource-object-relationships>
 -}
 data Relationship = Relationship
-  { _data :: Maybe (RelationshipType (Identifier Existing))
+  { _data :: Maybe (RelationshipType (Identifier (Either New Existing)))
   , _links :: Links
   } deriving (Show, Eq, Generic)
 
 instance Hashable Relationship
 
-relData :: Relationship -> Maybe (RelationshipType (Identifier Existing))
+relData :: Relationship -> Maybe (RelationshipType (Identifier (Either New Existing)))
 relData = _data
 
 relLinks :: Relationship -> Links
@@ -270,7 +270,7 @@ Constructor function for creating a Relationship record
 
 A relationship must contain either an Identifier or a Links record
 -}
-mkRelationship :: These (RelationshipType (Identifier Existing)) Links -> Relationship
+mkRelationship :: These (RelationshipType (Identifier (Either New Existing))) Links -> Relationship
 mkRelationship (This resId) = Relationship (Just resId) mempty
 mkRelationship (That links) = Relationship Nothing links
 mkRelationship (These resId links) = Relationship (Just resId) links
