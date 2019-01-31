@@ -222,8 +222,8 @@ class (Applicative m, IdentifierContext a) => ToResourcefulEntity m a where
   type ResourceIdState a = Existing
 
   resourceIdentifier :: a -> m (ResourceState (ResourceIdState a) Text)
-  default resourceIdentifier :: (HasId a, ResourceIdState a ~ Existing) => a -> m (ResourceState (ResourceIdState a) Text)
-  resourceIdentifier = pure . Identity . resourceId
+  default resourceIdentifier :: (HasId a, Applicative (ResourceState (ResourceIdState a))) => a -> m (ResourceState (ResourceIdState a) Text)
+  resourceIdentifier = pure . pure . resourceId
 
   resourceLinks :: a -> m Links
   resourceLinks = pure . const mempty

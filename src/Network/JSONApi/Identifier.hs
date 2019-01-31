@@ -43,7 +43,7 @@ data Existing
 type family ResourceState st where
   ResourceState New = Proxy
   ResourceState Existing = Identity
-  ResourceState (Either New Existing) = Identity
+  ResourceState (Either New Existing) = Maybe
 
 {- |
 Identifiers are used to encapsulate the minimum amount of information
@@ -119,6 +119,23 @@ instance FromJSON (Identifier New) where
       typ <- v .: "type"
       meta <- v .:? "meta"
       return $ Identifier Proxy typ (fromMaybe mempty meta)
+
+instance ToJSON (Identifier (Either New Existing)) where
+  toJSON (Identifier id resType resMetaData) =
+    AE.object $ addOptional ["id" .= id, "type" .= resType]
+    where
+      addOptional l =
+        if HM.null (fromMeta resMetaData)
+          then l
+          else (("meta" .= resMetaData) : l)
+
+instance FromJSON (Identifier (Either New Existing)) where
+  parseJSON =
+    AE.withObject "resourceIdentifier" $ \v -> do
+      mid <- v .: "id"
+      typ <- v .: "type"
+      meta <- v .:? "meta"
+      return $ Identifier mid typ (fromMaybe mempty meta)
 
 {- |
 Typeclass indicating how to access metadata for the given datatype.
