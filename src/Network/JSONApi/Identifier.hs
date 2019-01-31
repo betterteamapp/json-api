@@ -20,6 +20,8 @@ module Network.JSONApi.Identifier
 , New
 , Existing
 , ResourceState
+-- * Unsafe
+, maybeExisting
 ) where
 
 import Control.Lens.TH
@@ -157,5 +159,11 @@ existing x = Identifier (Identity $ resourceId x) (resourceType x) (resourceMeta
 
 new :: (IdentifierContext a) => a -> Identifier New
 new x = Identifier Proxy (resourceType x) (resourceMeta x)
+
+-- | Slightly unsafe constructor that should go away when a good solution is found
+maybeExisting :: (IdentifierContext a) => a -> (a -> Maybe Text) -> Maybe (Identifier Existing)
+maybeExisting x f = case f x of
+  Nothing -> Nothing
+  Just ident -> Just $ Identifier (pure ident) (resourceType x) (resourceMeta x)
 
 makeLenses ''Identifier
