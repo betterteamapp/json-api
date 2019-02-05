@@ -134,7 +134,7 @@ instance ToJSON (Identifier (Either New Existing)) where
 instance FromJSON (Identifier (Either New Existing)) where
   parseJSON =
     AE.withObject "resourceIdentifier" $ \v -> do
-      mid <- v .: "id"
+      mid <- v .:? "id"
       typ <- v .: "type"
       meta <- v .:? "meta"
       return $ Identifier mid typ (fromMaybe mempty meta)
