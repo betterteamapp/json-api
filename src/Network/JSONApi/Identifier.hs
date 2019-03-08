@@ -28,11 +28,8 @@ import Control.Lens.TH
 import Data.Aeson (ToJSON, FromJSON, (.=), (.:), (.:?))
 import qualified Data.Aeson as AE
 import Data.Hashable
-import Data.Hashable.Lifted
 import qualified Data.HashMap.Strict as HM
 import Data.Maybe (fromMaybe)
-import Data.Functor.Classes
-import Data.Functor.Identity
 import Data.Proxy
 import Data.Text (Text)
 import qualified GHC.Generics as G
@@ -42,10 +39,10 @@ import Prelude hiding (id)
 data New
 data Existing
 
-type family ResourceState st where
-  ResourceState New = Proxy
-  ResourceState Existing = Identity
-  ResourceState (Either New Existing) = Maybe
+type family ResourceState st a where
+  ResourceState New a = Proxy a
+  ResourceState Existing a = a
+  ResourceState (Either New Existing) a = Maybe a
 
 {- |
 Identifiers are used to encapsulate the minimum amount of information
@@ -61,32 +58,32 @@ data Identifier st = Identifier
   , _metadata :: Meta
   } deriving (G.Generic)
 
-instance (Show1 (ResourceState st)) => Show (Identifier st) where
+instance (Show (ResourceState st Text)) => Show (Identifier st) where
   showsPrec n v =
     showString "Identifier {_ident = " .
-    showsPrec1 n (_ident v) .
+    showsPrec n (_ident v) .
     showString ", _datatype = " .
     showsPrec n (_datatype v) .
     showString ", _metadata = " .
     showsPrec n (_metadata v) .
     showString "}"
 
-instance (Eq1 (ResourceState st)) => Eq (Identifier st) where
+instance (Eq (ResourceState st Text)) => Eq (Identifier st) where
   (==) a b =
-    eq1 (_ident a) (_ident b) &&
+    _ident a == _ident b &&
     _datatype a == _datatype b &&
     _metadata a == _metadata b
 
-instance (Hashable1 (ResourceState st)) => Hashable (Identifier st) where
+instance (Hashable (ResourceState st Text)) => Hashable (Identifier st) where
   hashWithSalt s x =
-    s `hashWithSalt1`
+    s `hashWithSalt`
     _ident x `hashWithSalt`
     _datatype x `hashWithSalt`
     _metadata x
 
 instance ToJSON (Identifier Existing) where
   toJSON (Identifier resId resType resMetaData) =
-    AE.object $ addOptional ["id" .= runIdentity resId, "type" .= resType]
+    AE.object $ addOptional ["id" .= resId, "type" .= resType]
     where
       addOptional l =
         if HM.null (fromMeta resMetaData)
@@ -155,7 +152,7 @@ class HasId a where
   resourceId :: a -> Text
 
 existing :: (IdentifierContext a, HasId a) => a -> Identifier Existing
-existing x = Identifier (Identity $ resourceId x) (resourceType x) (resourceMeta x)
+existing x = Identifier (resourceId x) (resourceType x) (resourceMeta x)
 
 new :: (IdentifierContext a) => a -> Identifier New
 new x = Identifier Proxy (resourceType x) (resourceMeta x)
@@ -164,6 +161,6 @@ new x = Identifier Proxy (resourceType x) (resourceMeta x)
 maybeExisting :: (IdentifierContext a) => a -> (a -> Maybe Text) -> Maybe (Identifier Existing)
 maybeExisting x f = case f x of
   Nothing -> Nothing
-  Just ident -> Just $ Identifier (pure ident) (resourceType x) (resourceMeta x)
+  Just ident -> Just $ Identifier ident (resourceType x) (resourceMeta x)
 
 makeLenses ''Identifier

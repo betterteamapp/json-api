@@ -31,7 +31,7 @@ spec =
 
     it "JSON encodes/decodes a list of resources" $ do
       -- TODO: test the main resource actually is a list
-      let jsonApiObj = runIdentity $ manyDocs [testObject, testObject2]
+      let jsonApiObj = runIdentity $ manyDoc [testObject, testObject2]
       let encodedJson = encodeDocumentObject jsonApiObj
       let decodedJson = (decodeDocumentObject encodedJson) :: Either String (Document Existing [] TestResource)
       {- putStrLn (BS.unpack encodedJson) -}

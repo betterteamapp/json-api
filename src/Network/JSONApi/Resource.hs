@@ -32,24 +32,21 @@ module Network.JSONApi.Resource
 
 import Control.Applicative
 import Control.Lens.TH
-import Data.Aeson (ToJSON, FromJSON, (.=), (.:), (.:?))
+import Data.Aeson (ToJSON, FromJSON, (.=), (.:?))
 import qualified Data.Aeson as AE
 import qualified Data.Aeson.Types as AE
 import Data.Functor.Classes
-import Data.Functor.Identity
 import Data.Hashable
 import Data.Hashable.Lifted
 import qualified Data.HashMap.Strict as HM
 import Data.Maybe (catMaybes, fromMaybe)
 import Data.Monoid
-import Data.Proxy
 import Data.Semigroup
 import Data.Text (Text)
 import Data.These (These(..))
 import GHC.Generics hiding (Meta)
 import Network.JSONApi.Identifier
   ( Existing
-  , New
   , HasId(..)
   , Identifier(..)
   , IdentifierContext(..)
@@ -132,21 +129,21 @@ data Resource st a = Resource
   , _resRelationships :: Relationships
   } deriving (Generic, Generic1, Functor)
 
-deriving instance (Show1 (ResourceState st), Show a) => Show (Resource st a)
-deriving instance (Eq1 (ResourceState st), Eq a) => Eq (Resource st a)
+deriving instance (Show (ResourceState st Text), Show a) => Show (Resource st a)
+deriving instance (Eq (ResourceState st Text), Eq a) => Eq (Resource st a)
 makeFields ''Resource
 
-instance (Hashable a, Hashable1 (ResourceState st)) => Hashable (Resource st a)
-instance (Hashable1 (ResourceState st)) => Hashable1 (Resource st)
+instance (Hashable a, Hashable (ResourceState st Text)) => Hashable (Resource st a)
+instance (Hashable (ResourceState st Text)) => Hashable1 (Resource st)
 
-instance (Eq1 (ResourceState st)) => Eq1 (Resource st) where
+instance (Eq (ResourceState st Text)) => Eq1 (Resource st) where
   liftEq eq_ r1 r2 =
     _resIdentifier r1 == _resIdentifier r2 &&
     eq_ (_resValue r1) (_resValue r2) &&
     _resLinks r1 == _resLinks r2 &&
     _resRelationships r1 == _resRelationships r2
 
-instance (Show1 (ResourceState st)) => Show1 (Resource st) where
+instance (Show (ResourceState st Text)) => Show1 (Resource st) where
   liftShowsPrec sp _ p f =
     showString "Resource { identifier =" .
     showsPrec p (_resIdentifier f) .
@@ -182,6 +179,7 @@ instance (ToJSON (Identifier st)) => AE.ToJSON1 (Resource st) where
               else Just ("relationships" .= rels)
           ]
 
+
 instance AE.FromJSON (Identifier st) => AE.FromJSON1 (Resource st) where
   liftParseJSON p1 _ = AE.withObject "resourceObject" $ \v -> do
     ident <- AE.parseJSON (AE.Object v)
@@ -209,7 +207,7 @@ instance IdentifierContext (Resource st a) where
   resourceMeta = _metadata . _resIdentifier
 
 instance HasId (Resource Existing a) where
-  resourceId = runIdentity . _ident . _resIdentifier
+  resourceId = _ident . _resIdentifier
 
 {- |
 A typeclass for decorating an entity with JSON API properties
@@ -222,8 +220,8 @@ class (Applicative m, IdentifierContext a) => ToResourcefulEntity m a where
   type ResourceIdState a = Existing
 
   resourceIdentifier :: a -> m (ResourceState (ResourceIdState a) Text)
-  default resourceIdentifier :: (HasId a, Applicative (ResourceState (ResourceIdState a))) => a -> m (ResourceState (ResourceIdState a) Text)
-  resourceIdentifier = pure . pure . resourceId
+  default resourceIdentifier :: (HasId a, ResourceIdState a ~ Existing) => a -> m (ResourceState (ResourceIdState a) Text)
+  resourceIdentifier = pure . resourceId
 
   resourceLinks :: a -> m Links
   resourceLinks = pure . const mempty

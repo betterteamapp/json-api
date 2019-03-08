@@ -37,7 +37,7 @@ module Network.JSONApi
 , R.mkRelationship
 , R.mkRelationships
 , D.oneDoc
-, D.manyDocs
+, D.manyDoc
 , D.composeDoc
 , D.include
 , D.includes

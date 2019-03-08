@@ -46,6 +46,7 @@ library
                , uri-bytestring
                , these
                , transformers
+               , vector
 
   default-language:    Haskell2010
 
@@ -89,6 +90,7 @@ test-suite json-api-test
                , text
                , unordered-containers
                , uri-bytestring
+               , vector
 
   default-language:    Haskell2010
 

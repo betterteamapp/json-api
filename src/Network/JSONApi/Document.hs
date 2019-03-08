@@ -1,6 +1,7 @@
 {-# LANGUAGE DeriveFunctor    #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE KindSignatures #-}
+{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -10,6 +11,8 @@ Contains representations of the top-level JSON-API document structure.
 -}
 module Network.JSONApi.Document
   ( Document
+  , OneDoc
+  , ManyDoc
   , docData
   , docLinks
   , docMeta
@@ -19,7 +22,7 @@ module Network.JSONApi.Document
   , Included
   , getIncluded
   , oneDoc
-  , manyDocs
+  , manyDoc
   , composeDoc
   , include
   , includes
@@ -32,13 +35,11 @@ module Network.JSONApi.Document
 import Data.Aeson
        (FromJSON, FromJSON1(..), ToJSON, ToJSON1(..), Value, (.:), (.:?),
         (.=), parseJSON1, toJSON1)
-import Control.Monad
 import Control.Lens hiding ((.=))
 import Control.Lens.TH
 import qualified Data.Aeson as AE
 import qualified Data.DList as DL
 import Data.Functor.Compose
-import Data.Functor.Identity
 import Data.Hashable
 import Data.Hashable.Lifted
 import Data.Foldable
@@ -49,6 +50,8 @@ import Data.Maybe (catMaybes, fromMaybe)
 import Data.Semigroup
 import Data.Text (Text)
 import qualified Data.Text as T
+import Data.Vector (Vector)
+import qualified Data.Vector as V
 import qualified GHC.Generics as G
 import qualified Network.JSONApi.Error as E
 import Network.JSONApi.Link as L
@@ -74,10 +77,13 @@ data Document (st :: *) (f :: * -> *) (a :: *) = Document
 
 makeLenses ''Document
 
-instance (Show1 f, Show a, Show1 (I.ResourceState st)) => Show (Document st f a) where
+type OneDoc a = Document (R.ResourceIdState a) Identity (R.ResourceValue a)
+type ManyDoc a = Document (R.ResourceIdState a) Vector (R.ResourceValue a)
+
+instance (Show1 f, Show1 (Resource st), Show a, Show (I.ResourceState st a)) => Show (Document st f a) where
   showsPrec n v =
     showString "Document {data = " .
-    showsPrec1 n (_docData v) .
+    showsPrec n (_docData v) .
     showString ", links = " .
     showsPrec n (_docLinks v) .
     showString ", meta = " .
@@ -86,17 +92,16 @@ instance (Show1 f, Show a, Show1 (I.ResourceState st)) => Show (Document st f a)
     showsPrec n (_docIncluded v) .
     showString "}"
 
-instance (Eq1 f, Eq a, Eq1 (I.ResourceState st)) => Eq (Document st f a) where
+instance (Eq1 f, Eq a, Eq1 (Resource st), Eq (I.ResourceState st a)) => Eq (Document st f a) where
   (==) a b =
-    eq1 (_docData a) (_docData b) &&
+    _docData a == _docData b &&
     _docLinks a == _docLinks b &&
     _docMeta a == _docMeta b &&
     _docIncluded a == _docIncluded b
 
-instance (Functor f, Hashable1 f, Hashable1 (I.ResourceState st)) => Hashable1 (Document st f)
-instance (Hashable1 f, Hashable a, Hashable1 (I.ResourceState st)) => Hashable (Document st f a) where
+instance (Hashable1 f, Hashable a, Hashable1 (Resource st), Hashable (I.ResourceState st a)) => Hashable (Document st f a) where
   hashWithSalt s x =
-    s `hashWithSalt1`
+    s `hashWithSalt`
     _docData x `hashWithSalt`
     _docLinks x `hashWithSalt`
     _docMeta x `hashWithSalt` _docIncluded x
@@ -144,14 +149,14 @@ getIncluded (Included d) = DL.toList d
 {- |
 Constructor function for the Document data type.
 -}
-oneDoc :: (ToJSON (R.ResourceValue a), ToResourcefulEntity m a) => a -> m (Document (R.ResourceIdState a) Identity (R.ResourceValue a))
+oneDoc :: (ToJSON (R.ResourceValue a), ToResourcefulEntity m a) => a -> m (OneDoc a)
 oneDoc = fmap (composeDoc . pure) . R.toResource
 
 {- |
 Constructor function for the Document data type.
 -}
-manyDocs :: (ToJSON a, Monad m, ToResourcefulEntity m a) => [a] -> m (Document (R.ResourceIdState a) [] (R.ResourceValue a))
-manyDocs = fmap composeDoc . mapM R.toResource
+manyDoc :: (Monad m, ToJSON (R.ResourceValue a), ToResourcefulEntity m a) => [a] -> m (ManyDoc a)
+manyDoc = fmap composeDoc . mapM R.toResource . V.fromList
 
 {- |
 Constructor function for the Document data type. It is possible to create an

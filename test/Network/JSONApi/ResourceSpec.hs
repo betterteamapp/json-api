@@ -64,12 +64,12 @@ myRelationshipss =
 
 relationship :: Relationship
 relationship = mkRelationship $ These
-  (ToOne $ pure $ Identifier (pure "42") "TestObject" mempty)
+  (ToOne $ pure $ Identifier "42" "TestObject" mempty)
   myResourceLinks
 
 otherRelationship :: Relationship
 otherRelationship = mkRelationship $ These
-  (ToMany $ pure $ Identifier (pure "49") "TestObject" mempty)
+  (ToMany $ pure $ Identifier "49" "TestObject" mempty)
   myResourceLinks
 
 myResourceLinks :: Links
